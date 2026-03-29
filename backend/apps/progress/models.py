@@ -1,3 +1,15 @@
 from django.db import models
+from users.models import User
+from challenges.models import Challenge
 
-# Create your models here.
+class UserProgress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='progress')
+    challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, related_name='user_progress')
+    completed = models.BooleanField(default=False)
+    points_earned = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('user', 'challenge')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.challenge.title}"
