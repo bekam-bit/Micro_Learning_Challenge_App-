@@ -126,10 +126,22 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         profile_data = validated_data.pop("profile", None)
+        request = self.context.get("request")
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        if request is not None:
+            uploaded_picture = request.FILES.get("profile_picture")
+            uploaded_bio = request.data.get("bio")
+
+            if uploaded_picture is not None or uploaded_bio is not None:
+                profile_data = profile_data or {}
+                if uploaded_picture is not None:
+                    profile_data["profile_picture"] = uploaded_picture
+                if uploaded_bio is not None:
+                    profile_data["bio"] = uploaded_bio
 
         if profile_data is not None:
             profile, _ = UserProfile.objects.get_or_create(user=instance)

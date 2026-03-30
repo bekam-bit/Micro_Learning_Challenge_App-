@@ -1,5 +1,5 @@
 from django.db import models
-from categories.models import Category
+from apps.categories.models import Category
 
 class Lesson(models.Model):
     title = models.CharField(max_length=200)

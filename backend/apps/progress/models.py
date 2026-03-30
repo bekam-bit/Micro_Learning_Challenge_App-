@@ -1,6 +1,6 @@
 from django.db import models
-from users.models import User
-from challenges.models import Challenge
+from apps.users.models import User
+from apps.challenges.models import Challenge
 
 class UserProgress(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='progress')

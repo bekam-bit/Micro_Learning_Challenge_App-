@@ -1,5 +1,5 @@
 from django.db import models
-from lessons.models import Lesson
+from apps.lessons.models import Lesson
 
 class Challenge(models.Model):
     DIFFICULTY_CHOICES = (

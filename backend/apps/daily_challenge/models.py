@@ -1,5 +1,5 @@
 from django.db import models
-from challenges.models import Challenge
+from apps.challenges.models import Challenge
 
 class DailyChallenge(models.Model):
     challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, related_name='daily_entries')

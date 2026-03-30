@@ -9,7 +9,7 @@ class UserProfile(models.Model):
         related_name="profile",
     )
     bio = models.TextField(blank=True)
-    profile_picture = models.URLField(blank=True)
+    profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
     total_points = models.PositiveIntegerField(default=0)
     modules_completed_count = models.PositiveIntegerField(default=0)
     modules_total_count = models.PositiveIntegerField(default=0)
