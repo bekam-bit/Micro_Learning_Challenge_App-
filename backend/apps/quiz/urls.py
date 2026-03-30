@@ -1,9 +1,19 @@
-from django.urls import path
+from rest_framework.routers import DefaultRouter
+from .views import (
+    QuizAdminViewSet,
+    QuestionAdminViewSet,
+    AnswerAdminViewSet,
+    QuizUserViewSet
+)
 
-from .views import quiz_health
+router = DefaultRouter()
 
-app_name = "quiz"
+# Admin endpoints
+router.register(r'admin/quizzes', QuizAdminViewSet, basename='admin-quizzes')
+router.register(r'admin/questions', QuestionAdminViewSet, basename='admin-questions')
+router.register(r'admin/answers', AnswerAdminViewSet, basename='admin-answers')
 
-urlpatterns = [
-    path("health/", quiz_health, name="health"),
-]
+# User endpoints
+router.register(r'quizzes', QuizUserViewSet, basename='user-quizzes')
+
+urlpatterns = router.urls

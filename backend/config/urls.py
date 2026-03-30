@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/challenges/', include('apps.challenges.urls')),
     path('api/progress/', include('apps.progress.urls')),
     path('api/points/', include('apps.points.urls')),
+    path('api/quiz/', include('apps.quiz.urls')),
 ]
 
 if settings.DEBUG:
