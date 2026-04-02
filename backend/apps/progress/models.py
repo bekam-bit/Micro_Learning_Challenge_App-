@@ -7,6 +7,7 @@ class UserProgress(models.Model):
     challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, related_name='user_progress')
     completed = models.BooleanField(default=False)
     points_earned = models.PositiveIntegerField(default=0)
+    progress_percent = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ('user', 'challenge')

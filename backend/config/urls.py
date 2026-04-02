@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/categories/', include('apps.categories.urls')),
     path('api/modules/', include('apps.modules.urls')),
     path('api/lessons/', include('apps.lessons.urls')),
+    path('api/challenges/', include('apps.challenges.urls')),
 ]
 
 if settings.DEBUG:
