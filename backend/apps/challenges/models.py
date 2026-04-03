@@ -176,20 +176,21 @@ class ChallengeAttempt(models.Model):
 
         question_count = self.challenge.questions.count()
         answered_count = self.answers.exclude(answer_text='').count()
-        if question_count == 0:
-            progress_percent = 0
-        else:
-            progress_percent = int((answered_count / question_count) * 100)
-
-        UserProgress.objects.update_or_create(
+        UserProgress.upsert_challenge_progress(
             user=self.user,
             challenge=self.challenge,
-            defaults={
-                'completed': self.is_submitted,
-                'points_earned': self.points_awarded,
-                'progress_percent': progress_percent,
-            },
+            completed=self.is_submitted,
+            points_earned=self.points_awarded,
+            completed_parts=answered_count,
+            total_parts=question_count,
         )
+
+        if self.challenge.lesson_id:
+            UserProgress.sync_lesson_progress(user=self.user, lesson=self.challenge.lesson)
+            if self.challenge.lesson.module_id:
+                UserProgress.sync_module_progress(user=self.user, module=self.challenge.lesson.module)
+        elif self.challenge.module_id:
+            UserProgress.sync_module_progress(user=self.user, module=self.challenge.module)
 
 
 class ChallengeAttemptAnswer(models.Model):

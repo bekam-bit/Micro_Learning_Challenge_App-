@@ -234,3 +234,111 @@ Recommended frontend behavior:
 - Generate one key per logical submit click.
 - Reuse same key for network retries of that same submit action.
 - Do not generate a new key for retries.
+
+---
+
+### Progress APIs (Frontend Contract)
+
+Authentication:
+- All progress endpoints require JWT Bearer token.
+- Learner endpoints are scoped to the authenticated user.
+- Admin endpoints require admin role.
+
+#### Learner Progress Endpoints
+
+| Endpoint | Methods | Auth Required | Role Required | Description |
+| --- | --- | --- | --- | --- |
+| /api/progress/ | GET | Yes | learner or admin | List current authenticated user's progress records. |
+| /api/progress/summary/ | GET | Yes | learner or admin | Return current authenticated user's aggregated progress summary. |
+
+Learner list query params:
+- owner_type: challenge, lesson, module
+- completed: true, false, 1, 0, yes, no
+
+Learner list response item fields:
+- id
+- owner_type
+- owner_id
+- owner_title
+- completed
+- points_earned
+- completed_parts
+- total_parts
+- progress_percent
+- created_at
+- updated_at
+- challenge
+- lesson
+- module
+
+Learner summary response shape:
+{
+	"challenges": { "completed": number, "total": number, "percentage": number },
+	"lessons": { "completed": number, "total": number, "percentage": number },
+	"modules": { "completed": number, "total": number, "percentage": number },
+	"points_earned": number
+}
+
+#### Admin Progress Endpoints
+
+| Endpoint | Methods | Auth Required | Role Required | Description |
+| --- | --- | --- | --- | --- |
+| /api/progress/admin/ | GET | Yes | admin | List all users progress records (paginated, searchable, sortable, filterable). |
+| /api/progress/admin/summary/ | GET | Yes | admin | Return global progress KPI summary for dashboard cards. |
+
+Admin list query params:
+- page: page number
+- page_size: page size (max 100)
+- search: full-text search on username, email, challenge title, lesson title, module title
+- ordering: id, updated_at, created_at, points_earned, progress_percent, completed_parts, total_parts, user__username
+- user_id: filter by specific user id
+- owner_type: challenge, lesson, module
+- completed: true, false, 1, 0, yes, no
+- from: start datetime/date filter on updated_at (ISO datetime or YYYY-MM-DD)
+- to: end datetime/date filter on updated_at (ISO datetime or YYYY-MM-DD)
+
+Admin list default ordering:
+- -updated_at, -id
+
+Admin list response shape (paginated):
+{
+	"count": number,
+	"next": string or null,
+	"previous": string or null,
+	"results": [
+		{
+			"user_id": number,
+			"username": string,
+			"email": string,
+			"id": number,
+			"owner_type": "challenge" | "lesson" | "module",
+			"owner_id": number,
+			"owner_title": string,
+			"completed": boolean,
+			"points_earned": number,
+			"completed_parts": number,
+			"total_parts": number,
+			"progress_percent": number,
+			"created_at": string,
+			"updated_at": string,
+			"challenge": number or null,
+			"lesson": number or null,
+			"module": number or null
+		}
+	]
+}
+
+Admin summary query params:
+- user_id: optional user-specific summary
+- owner_type: challenge, lesson, module
+- from: start datetime/date filter on updated_at (ISO datetime or YYYY-MM-DD)
+- to: end datetime/date filter on updated_at (ISO datetime or YYYY-MM-DD)
+
+Admin summary response shape:
+{
+	"users_tracked": number,
+	"challenges": { "completed": number, "total": number, "percentage": number },
+	"lessons": { "completed": number, "total": number, "percentage": number },
+	"modules": { "completed": number, "total": number, "percentage": number },
+	"points_earned": number
+}
