@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 from apps.categories.models import Category
 from apps.lessons.models import Lesson
 from apps.modules.models import Module
+from apps.users.models import UserDailyActivity, UserProfile
 
 from .models import ChallengeAttempt, ChallengeQuestion, ChallengeSubmission
 
@@ -679,3 +680,149 @@ class ChallengeAPITests(APITestCase):
 		self.assertTrue(retry_submit.data['idempotency_replayed'])
 		self.assertEqual(retry_submit.data['id'], first_submit.data['id'])
 		self.assertEqual(retry_submit.data['score'], first_submit.data['score'])
+
+	def test_first_challenge_completion_starts_streak(self):
+		self.client.force_authenticate(user=self.admin_user)
+		challenge_response = self.client.post(
+			'/api/challenges/',
+			{
+				'title': 'Streak Start Challenge',
+				'description': 'Starts streak',
+				'difficulty': 'easy',
+				'points': 10,
+				'time_limit_minutes': 10,
+				'lesson': self.lesson.id,
+			},
+			format='json',
+		)
+		challenge_id = challenge_response.data['id']
+		question = self.client.post(
+			f'/api/challenges/{challenge_id}/questions/',
+			{
+				'question_text': 'Type YES',
+				'question_type': 'short_text_strict',
+				'correct_answer': 'YES',
+				'max_score': 1,
+				'order': 1,
+			},
+			format='json',
+		)
+
+		self.client.force_authenticate(user=self.learner_user)
+		submit_response = self.client.post(
+			f'/api/challenges/{challenge_id}/submit/',
+			{
+				'answers': [
+					{'question_id': question.data['id'], 'answer_text': 'YES'},
+				],
+			},
+			format='json',
+		)
+		self.assertEqual(submit_response.status_code, status.HTTP_201_CREATED)
+
+		profile = UserProfile.objects.get(user=self.learner_user)
+		self.assertEqual(profile.current_streak, 1)
+		self.assertEqual(profile.max_streak, 1)
+		self.assertEqual(profile.last_activity_date, timezone.localdate())
+		daily_activity = UserDailyActivity.objects.get(user=self.learner_user, activity_date=timezone.localdate())
+		self.assertEqual(daily_activity.challenges_completed, 1)
+		self.assertEqual(daily_activity.points_earned, 10)
+		self.assertGreater(daily_activity.activity_score, 0)
+
+	def test_challenge_completion_increments_streak_on_consecutive_day(self):
+		profile = UserProfile.objects.get(user=self.learner_user)
+		profile.current_streak = 3
+		profile.last_activity_date = timezone.localdate() - timedelta(days=1)
+		profile.save(update_fields=['current_streak', 'last_activity_date'])
+
+		self.client.force_authenticate(user=self.admin_user)
+		challenge_response = self.client.post(
+			'/api/challenges/',
+			{
+				'title': 'Streak Increment Challenge',
+				'description': 'Consecutive day',
+				'difficulty': 'easy',
+				'points': 10,
+				'time_limit_minutes': 10,
+				'lesson': self.lesson.id,
+			},
+			format='json',
+		)
+		challenge_id = challenge_response.data['id']
+		question = self.client.post(
+			f'/api/challenges/{challenge_id}/questions/',
+			{
+				'question_text': 'Type YES',
+				'question_type': 'short_text_strict',
+				'correct_answer': 'YES',
+				'max_score': 1,
+				'order': 1,
+			},
+			format='json',
+		)
+
+		self.client.force_authenticate(user=self.learner_user)
+		submit_response = self.client.post(
+			f'/api/challenges/{challenge_id}/submit/',
+			{
+				'answers': [
+					{'question_id': question.data['id'], 'answer_text': 'YES'},
+				],
+			},
+			format='json',
+		)
+		self.assertEqual(submit_response.status_code, status.HTTP_201_CREATED)
+
+		profile.refresh_from_db()
+		self.assertEqual(profile.current_streak, 4)
+		self.assertEqual(profile.max_streak, 4)
+		self.assertEqual(profile.last_activity_date, timezone.localdate())
+
+	def test_challenge_completion_resets_streak_after_gap(self):
+		profile = UserProfile.objects.get(user=self.learner_user)
+		profile.current_streak = 6
+		profile.last_activity_date = timezone.localdate() - timedelta(days=3)
+		profile.save(update_fields=['current_streak', 'last_activity_date'])
+
+		self.client.force_authenticate(user=self.admin_user)
+		challenge_response = self.client.post(
+			'/api/challenges/',
+			{
+				'title': 'Streak Reset Challenge',
+				'description': 'Gap reset',
+				'difficulty': 'easy',
+				'points': 10,
+				'time_limit_minutes': 10,
+				'lesson': self.lesson.id,
+			},
+			format='json',
+		)
+		challenge_id = challenge_response.data['id']
+		question = self.client.post(
+			f'/api/challenges/{challenge_id}/questions/',
+			{
+				'question_text': 'Type YES',
+				'question_type': 'short_text_strict',
+				'correct_answer': 'YES',
+				'max_score': 1,
+				'order': 1,
+			},
+			format='json',
+		)
+
+		self.client.force_authenticate(user=self.learner_user)
+		submit_response = self.client.post(
+			f'/api/challenges/{challenge_id}/submit/',
+			{
+				'answers': [
+					{'question_id': question.data['id'], 'answer_text': 'YES'},
+				],
+			},
+			format='json',
+		)
+		self.assertEqual(submit_response.status_code, status.HTTP_201_CREATED)
+
+		profile.refresh_from_db()
+		self.assertEqual(profile.current_streak, 1)
+		self.assertEqual(profile.max_streak, 6)
+		self.assertEqual(profile.last_activity_date, timezone.localdate())

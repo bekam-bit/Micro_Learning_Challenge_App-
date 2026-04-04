@@ -3,8 +3,9 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.categories.models import Category
+from apps.progress.models import UserProgress
 
-from .models import Module
+from .models import Module, ModuleEnrollment
 
 User = get_user_model()
 class ModuleAPITests(APITestCase):
@@ -83,3 +84,131 @@ class ModuleAPITests(APITestCase):
 		response = self.client.post('/api/modules/', payload, format='json')
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 		self.assertTrue(Module.objects.filter(title='Python Foundations', category=self.active_category).exists())
+
+	def test_public_module_list_returns_enroll_action_for_active_module(self):
+		response = self.client.get('/api/modules/')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		first = next(item for item in response.data['results'] if item['id'] == self.active_module.id)
+		self.assertEqual(first['module_action'], 'enroll')
+
+	def test_module_list_returns_coming_soon_action(self):
+		coming_soon_module = Module.objects.create(
+			category=self.active_category,
+			title='WebGL Mastery',
+			description='Soon',
+			status='coming_soon',
+		)
+		response = self.client.get('/api/modules/')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		item = next(result for result in response.data['results'] if result['id'] == coming_soon_module.id)
+		self.assertEqual(item['module_action'], 'coming_soon')
+
+	def test_authenticated_user_gets_enroll_action_without_enrollment(self):
+		learner = User.objects.create_user(
+			username='learner_start',
+			email='learner_start@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
+		self.client.force_authenticate(user=learner)
+		response = self.client.get('/api/modules/')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		item = next(result for result in response.data['results'] if result['id'] == self.active_module.id)
+		self.assertEqual(item['module_action'], 'enroll')
+		self.assertEqual(item['module_progress_percent'], 0)
+		self.assertEqual(item['module_completed_parts'], 0)
+		self.assertEqual(item['module_total_parts'], 0)
+
+	def test_authenticated_enrolled_user_gets_start_action_without_progress(self):
+		learner = User.objects.create_user(
+			username='learner_enrolled',
+			email='learner_enrolled@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
+		ModuleEnrollment.objects.create(user=learner, module=self.active_module)
+		self.client.force_authenticate(user=learner)
+		response = self.client.get('/api/modules/')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		item = next(result for result in response.data['results'] if result['id'] == self.active_module.id)
+		self.assertEqual(item['module_action'], 'start')
+
+	def test_authenticated_user_gets_resume_action_with_progress(self):
+		learner = User.objects.create_user(
+			username='learner_resume',
+			email='learner_resume@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
+		ModuleEnrollment.objects.create(user=learner, module=self.active_module)
+		UserProgress.objects.create(
+			user=learner,
+			module=self.active_module,
+			completed=False,
+			completed_parts=1,
+			total_parts=3,
+			progress_percent=33,
+		)
+		self.client.force_authenticate(user=learner)
+		response = self.client.get('/api/modules/')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		item = next(result for result in response.data['results'] if result['id'] == self.active_module.id)
+		self.assertEqual(item['module_action'], 'resume')
+		self.assertEqual(item['module_progress_percent'], 33)
+		self.assertEqual(item['module_completed_parts'], 1)
+		self.assertEqual(item['module_total_parts'], 3)
+
+	def test_module_detail_includes_module_learning_fields(self):
+		learner = User.objects.create_user(
+			username='learner_detail',
+			email='learner_detail@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
+		ModuleEnrollment.objects.create(user=learner, module=self.active_module)
+		UserProgress.objects.create(
+			user=learner,
+			module=self.active_module,
+			completed=False,
+			completed_parts=2,
+			total_parts=5,
+			progress_percent=40,
+		)
+		self.client.force_authenticate(user=learner)
+		response = self.client.get(f'/api/modules/{self.active_module.id}/')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data['module_action'], 'resume')
+		self.assertEqual(response.data['module_progress_percent'], 40)
+		self.assertEqual(response.data['module_completed_parts'], 2)
+		self.assertEqual(response.data['module_total_parts'], 5)
+
+	def test_authenticated_user_can_enroll_module(self):
+		learner = User.objects.create_user(
+			username='learner_enroll_api',
+			email='learner_enroll_api@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
+		self.client.force_authenticate(user=learner)
+		response = self.client.post(f'/api/modules/{self.active_module.id}/enroll/')
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		self.assertTrue(ModuleEnrollment.objects.filter(user=learner, module=self.active_module).exists())
+
+		module_list_response = self.client.get('/api/modules/')
+		self.assertEqual(module_list_response.status_code, status.HTTP_200_OK)
+		item = next(result for result in module_list_response.data['results'] if result['id'] == self.active_module.id)
+		self.assertEqual(item['module_action'], 'start')
+
+	def test_enroll_endpoint_is_idempotent(self):
+		learner = User.objects.create_user(
+			username='learner_enroll_repeat',
+			email='learner_enroll_repeat@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
+		self.client.force_authenticate(user=learner)
+		first = self.client.post(f'/api/modules/{self.active_module.id}/enroll/')
+		second = self.client.post(f'/api/modules/{self.active_module.id}/enroll/')
+		self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+		self.assertEqual(second.status_code, status.HTTP_200_OK)
+		self.assertEqual(ModuleEnrollment.objects.filter(user=learner, module=self.active_module).count(), 1)

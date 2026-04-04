@@ -1,10 +1,16 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.users.models import UserDailyActivity, UserProfile
+from apps.users.services import (
+	register_challenge_completion_activity,
+	register_daily_challenge_completion_activity,
+)
 
 
 TEST_LEARNER_USERNAME = "bekiyo1234"
@@ -239,3 +245,64 @@ class AuthApiTests(APITestCase):
 		self.assertEqual(update_response.status_code, status.HTTP_400_BAD_REQUEST)
 		admin_user.refresh_from_db()
 		self.assertEqual(admin_user.role, "admin")
+
+
+class UserStreakServiceTests(TestCase):
+	def setUp(self):
+		user_model = get_user_model()
+		self.user = user_model.objects.create_user(
+			username='streak_user',
+			email='streak_user@example.com',
+			password='StrongPass123',
+		)
+		self.other_user = user_model.objects.create_user(
+			username='other_streak_user',
+			email='other_streak_user@example.com',
+			password='StrongPass123',
+		)
+
+	def test_register_challenge_completion_updates_streak_and_daily_activity(self):
+		profile, activity = register_challenge_completion_activity(self.user, points_earned=15)
+
+		self.assertEqual(profile.current_streak, 1)
+		self.assertEqual(profile.max_streak, 1)
+		self.assertEqual(profile.last_activity_date, activity.activity_date)
+		self.assertEqual(activity.challenges_completed, 1)
+		self.assertEqual(activity.points_earned, 15)
+		self.assertGreater(activity.activity_score, 0)
+
+	def test_same_day_completion_does_not_double_increment_streak(self):
+		register_challenge_completion_activity(self.user, points_earned=10)
+		profile, activity = register_challenge_completion_activity(self.user, points_earned=20)
+
+		self.assertEqual(profile.current_streak, 1)
+		self.assertEqual(profile.max_streak, 1)
+		self.assertEqual(activity.challenges_completed, 2)
+		self.assertEqual(activity.points_earned, 30)
+
+	def test_gap_resets_streak_and_users_are_isolated(self):
+		profile = UserProfile.objects.get(user=self.user)
+		profile.current_streak = 4
+		profile.last_activity_date = UserDailyActivity.objects.create(
+			user=self.user,
+			activity_date=timezone.localdate() - timedelta(days=3),
+			activity_score=10,
+		).activity_date
+		profile.save(update_fields=['current_streak', 'last_activity_date'])
+
+		register_challenge_completion_activity(self.user, points_earned=5)
+		register_challenge_completion_activity(self.other_user, points_earned=8)
+
+		profile.refresh_from_db()
+		other_profile = UserProfile.objects.get(user=self.other_user)
+		self.assertEqual(profile.current_streak, 1)
+		self.assertEqual(profile.max_streak, 4)
+		self.assertEqual(other_profile.current_streak, 1)
+		self.assertEqual(other_profile.max_streak, 1)
+
+	def test_daily_challenge_completion_uses_same_streak_pipeline(self):
+		profile, activity = register_daily_challenge_completion_activity(self.user, points_earned=12)
+		self.assertEqual(profile.current_streak, 1)
+		self.assertEqual(profile.max_streak, 1)
+		self.assertEqual(activity.challenges_completed, 1)
+		self.assertEqual(activity.points_earned, 12)

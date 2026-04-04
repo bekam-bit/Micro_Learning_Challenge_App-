@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 from apps.categories.models import Category
 
@@ -31,3 +32,29 @@ class Module(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ModuleEnrollment(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='module_enrollments',
+    )
+    module = models.ForeignKey(
+        Module,
+        on_delete=models.CASCADE,
+        related_name='enrollments',
+    )
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'module'],
+                name='unique_user_module_enrollment',
+            ),
+        ]
+        ordering = ['-enrolled_at']
+
+    def __str__(self):
+        return f'{self.user} enrolled in {self.module}'

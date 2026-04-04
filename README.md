@@ -1,5 +1,63 @@
 # Micro_Learning_Challenge_App-
 
+## Latest Backend Updates (Frontend Handoff)
+
+### Generic Points System
+
+- Points are now managed as a reusable feature via point transactions.
+- Challenge submissions publish/update a transaction record instead of hard-coding profile totals.
+- User profile total points are synced from the transaction ledger.
+
+Admin endpoint for frontend panel:
+
+| Endpoint | Methods | Auth Required | Role Required | Description |
+| --- | --- | --- | --- | --- |
+| `/api/points/admin/transactions/` | `GET` | Yes | `admin` | List points transactions with pagination, search, ordering, and filters. |
+
+Supported query params:
+
+- `user_id`
+- `source_type`
+- `source_id`
+- `search`
+- `ordering`
+
+### Module Card State + Progress Fields
+
+Module responses now include card-ready fields:
+
+- `module_action` (`enroll`, `start`, `resume`, `coming_soon`)
+- `module_progress_percent`
+- `module_completed_parts`
+- `module_total_parts`
+
+Enrollment endpoint:
+
+| Endpoint | Methods | Auth Required | Role Required | Description |
+| --- | --- | --- | --- | --- |
+| `/api/modules/<id>/enroll/` | `POST` | Yes | authenticated user | Enroll learner to module (idempotent: first call `201`, repeat `200`). |
+
+### Streak System (Challenge + Daily-Challenge Ready)
+
+- Streak logic is centralized in user services (single source of truth).
+- On successful challenge submission:
+	- updates `current_streak`
+	- updates `max_streak`
+	- updates `last_activity_date`
+	- records same-day activity in `UserDailyActivity` for Knowledge Momentum.
+- If `current_streak > max_streak`, max streak is normalized to current streak before daily recompute.
+- Daily challenge integration can call the same streak service wrapper when that API is implemented.
+
+Profile payload now includes:
+
+- `current_streak`
+- `max_streak`
+- `last_activity_date`
+
+### Full Test Status
+
+- Full backend suite currently passes: `68 passed`.
+
 ## Backend API Endpoints Available for Integration
 
 Base prefix: `/api/auth/`

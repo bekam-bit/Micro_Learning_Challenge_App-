@@ -1,4 +1,3 @@
-from django.db.models import Sum
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -14,9 +13,6 @@ def _sync_user_profile_from_progress(user):
     lesson_progress = UserProgress.objects.filter(user=user, lesson__isnull=False)
     module_progress = UserProgress.objects.filter(user=user, module__isnull=False)
 
-    points_earned = challenge_progress.aggregate(total=Sum("points_earned"))["total"] or 0
-
-    profile.total_points = points_earned
     profile.challenges_total_count = challenge_progress.count()
     profile.challenges_completed_count = challenge_progress.filter(completed=True).count()
     profile.lessons_total_count = lesson_progress.count()
@@ -25,7 +21,6 @@ def _sync_user_profile_from_progress(user):
     profile.modules_completed_count = module_progress.filter(completed=True).count()
     profile.save(
         update_fields=[
-            "total_points",
             "challenges_total_count",
             "challenges_completed_count",
             "lessons_total_count",

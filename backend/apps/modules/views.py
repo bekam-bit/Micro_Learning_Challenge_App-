@@ -1,11 +1,50 @@
 from rest_framework import generics, permissions
+from django.db.models import BooleanField, Exists, IntegerField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.views import APIView
 
 from config.pagination import StandardPageNumberPagination
 
+from apps.progress.models import UserProgress
 from apps.users.permissions import IsAdminRole
 
-from .models import Module
+from .models import Module, ModuleEnrollment
 from .serializers import ModuleSerializer
+
+
+def _with_user_learning_state(queryset, user):
+	if not user.is_authenticated:
+		return queryset.annotate(
+			user_is_enrolled=Value(False, output_field=BooleanField()),
+			user_progress_percent=Value(0, output_field=IntegerField()),
+			user_completed_parts=Value(0, output_field=IntegerField()),
+			user_total_parts=Value(0, output_field=IntegerField()),
+		)
+
+	enrollment_qs = ModuleEnrollment.objects.filter(user=user, module_id=OuterRef('pk'))
+	progress_qs = UserProgress.objects.filter(user=user, module_id=OuterRef('pk'))
+
+	return queryset.annotate(
+		user_is_enrolled=Exists(enrollment_qs),
+		user_progress_percent=Coalesce(
+			Subquery(progress_qs.values('progress_percent')[:1]),
+			Value(0),
+			output_field=IntegerField(),
+		),
+		user_completed_parts=Coalesce(
+			Subquery(progress_qs.values('completed_parts')[:1]),
+			Value(0),
+			output_field=IntegerField(),
+		),
+		user_total_parts=Coalesce(
+			Subquery(progress_qs.values('total_parts')[:1]),
+			Value(0),
+			output_field=IntegerField(),
+		),
+	)
 
 
 class ModuleListCreateView(generics.ListCreateAPIView):
@@ -32,6 +71,8 @@ class ModuleListCreateView(generics.ListCreateAPIView):
 		if sort_by not in allowed_sort_fields:
 			sort_by = 'title'
 
+		queryset = _with_user_learning_state(queryset, user)
+
 		return queryset.order_by(sort_by, 'id')
 
 	def get_permissions(self):
@@ -49,9 +90,31 @@ class ModuleDetailView(generics.RetrieveUpdateDestroyAPIView):
 		user = self.request.user
 		if not (user.is_authenticated and getattr(user, 'role', None) == 'admin'):
 			queryset = queryset.filter(category__is_active=True)
-		return queryset
+
+		return _with_user_learning_state(queryset, user)
 
 	def get_permissions(self):
 		if self.request.method in permissions.SAFE_METHODS:
 			return [permissions.AllowAny()]
 		return [permissions.IsAuthenticated(), IsAdminRole()]
+
+
+class ModuleEnrollView(APIView):
+	permission_classes = [permissions.IsAuthenticated]
+
+	def post(self, request, pk):
+		module = get_object_or_404(Module, pk=pk, category__is_active=True)
+		enrollment, created = ModuleEnrollment.objects.get_or_create(
+			user=request.user,
+			module=module,
+		)
+		status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+		return Response(
+			{
+				'module_id': module.id,
+				'enrolled': True,
+				'enrolled_at': enrollment.enrolled_at,
+				'created': created,
+			},
+			status=status_code,
+		)

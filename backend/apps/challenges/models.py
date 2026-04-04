@@ -172,6 +172,8 @@ class ChallengeAttempt(models.Model):
         super().save(*args, **kwargs)
 
     def update_user_progress(self):
+        from apps.points.models import PointTransaction
+        from apps.points.services import upsert_point_transaction
         from apps.progress.models import UserProgress
 
         question_count = self.challenge.questions.count()
@@ -184,6 +186,19 @@ class ChallengeAttempt(models.Model):
             completed_parts=answered_count,
             total_parts=question_count,
         )
+
+        if self.is_submitted:
+            upsert_point_transaction(
+                user=self.user,
+                points=self.points_awarded,
+                source_type=PointTransaction.SOURCE_CHALLENGE_ATTEMPT,
+                source_id=self.id,
+                reason='Challenge submission reward',
+                metadata={
+                    'challenge_id': self.challenge_id,
+                    'attempt_id': self.id,
+                },
+            )
 
         if self.challenge.lesson_id:
             UserProgress.sync_lesson_progress(user=self.user, lesson=self.challenge.lesson)

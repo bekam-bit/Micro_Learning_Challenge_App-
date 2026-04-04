@@ -36,6 +36,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 		"lessons_completed_count",
 		"challenges_completed_count",
 		"current_streak",
+		"max_streak",
 		"last_activity_date",
 	)
 	search_fields = ("user__username", "user__email")

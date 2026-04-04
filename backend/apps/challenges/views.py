@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from config.pagination import StandardPageNumberPagination
 
 from apps.users.permissions import IsAdminRole, IsLearnerRole
+from apps.users.services import register_challenge_completion_activity
 
 from .models import (
     Challenge,
@@ -256,6 +257,7 @@ def _grade_attempt(attempt):
         ]
     )
     attempt.update_user_progress()
+    register_challenge_completion_activity(attempt.user, points_earned=attempt.points_awarded)
     return max_score
 
 

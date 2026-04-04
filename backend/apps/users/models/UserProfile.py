@@ -18,6 +18,7 @@ class UserProfile(models.Model):
     challenges_completed_count = models.PositiveIntegerField(default=0)
     challenges_total_count = models.PositiveIntegerField(default=0)
     current_streak = models.PositiveIntegerField(default=0)
+    max_streak = models.PositiveIntegerField(default=0)
     last_activity_date = models.DateField(null=True, blank=True)
 
     @staticmethod

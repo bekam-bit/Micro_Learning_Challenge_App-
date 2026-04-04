@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'apps.lessons',
     'apps.challenges',
     'apps.quiz',
+    'apps.points',
     'apps.progress',
     'apps.daily_challenge',
     'apps.notifications',

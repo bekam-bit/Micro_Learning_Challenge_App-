@@ -11,8 +11,18 @@ User = get_user_model()
 
 class LessonAPITestCase(APITestCase):
 	def setUp(self):
-		self.admin = User.objects.create_user(username='admin', password='adminpass', role='admin')
-		self.user = User.objects.create_user(username='user', password='userpass', role='user')
+		self.admin = User.objects.create_user(
+			username='admin',
+			email='admin_lessons@example.com',
+			password='adminpass',
+			role='admin',
+		)
+		self.user = User.objects.create_user(
+			username='user',
+			email='user_lessons@example.com',
+			password='userpass',
+			role='learner',
+		)
 		self.category = Category.objects.create(name='Science', description='desc')
 		self.module = Module.objects.create(category=self.category, title='Quantum', description='desc', status='active', level='beginner')
 		self.lesson = Lesson.objects.create(
@@ -50,7 +60,7 @@ class LessonAPITestCase(APITestCase):
 		self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 	def test_lesson_create_admin(self):
-		self.client.login(username='admin', password='adminpass')
+		self.client.force_authenticate(user=self.admin)
 		data = {
 			'title': 'Entanglement',
 			'content': '<p>Quantum entanglement...</p>',
@@ -63,7 +73,7 @@ class LessonAPITestCase(APITestCase):
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 	def test_lesson_create_requires_video(self):
-		self.client.login(username='admin', password='adminpass')
+		self.client.force_authenticate(user=self.admin)
 		data = {
 			'title': 'No Video',
 			'content': 'Missing video',

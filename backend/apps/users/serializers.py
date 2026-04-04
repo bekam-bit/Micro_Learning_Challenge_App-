@@ -33,6 +33,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "challenges_total_count",
             "challenges_completion_percentage",
             "current_streak",
+            "max_streak",
             "last_activity_date",
         ]
 
