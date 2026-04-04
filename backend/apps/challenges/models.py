@@ -56,6 +56,10 @@ class Challenge(models.Model):
                 name='challenge_exactly_one_owner',
             )
         ]
+        indexes = [
+            models.Index(fields=['difficulty', 'created_at'], name='challenge_diff_ct_idx'),
+            models.Index(fields=['created_at'], name='challenge_created_idx'),
+        ]
 
     def get_scope(self):
         if self.lesson_id:
@@ -243,6 +247,10 @@ class ChallengeSubmission(models.Model):
 
     class Meta:
         ordering = ['-submitted_at']
+        indexes = [
+            models.Index(fields=['user', 'submitted_at'], name='csub_user_submitted_idx'),
+            models.Index(fields=['challenge', 'submitted_at'], name='csub_chal_submitted_idx'),
+        ]
 
     def __str__(self):
         return f'{self.user} - {self.challenge.title}'

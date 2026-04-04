@@ -31,7 +31,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 	parser_classes = [JSONParser, MultiPartParser, FormParser]
 
 	def get_object(self):
-		return self.request.user
+		return User.objects.select_related('profile').get(pk=self.request.user.pk)
 
 
 class LoginView(TokenObtainPairView):
@@ -50,7 +50,7 @@ class LogoutView(APIView):
 
 
 class UserListView(generics.ListAPIView):
-	queryset = User.objects.all().order_by("id")
+	queryset = User.objects.only('id', 'username', 'email', 'role', 'is_active', 'date_joined').order_by("id")
 	serializer_class = UserListSerializer
 	permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 	throttle_classes = [AdminActionRateThrottle]

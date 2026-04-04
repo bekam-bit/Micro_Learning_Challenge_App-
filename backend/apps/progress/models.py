@@ -62,6 +62,11 @@ class UserProgress(models.Model):
                 name='unique_user_module_progress',
             ),
         ]
+        indexes = [
+            models.Index(fields=['user', 'updated_at'], name='uprogress_user_upd_idx'),
+            models.Index(fields=['user', 'completed'], name='uprogress_user_comp_idx'),
+            models.Index(fields=['updated_at'], name='uprogress_updated_idx'),
+        ]
 
     @staticmethod
     def _calculate_percent(completed_parts: int, total_parts: int) -> int:

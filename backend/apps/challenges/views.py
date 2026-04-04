@@ -8,6 +8,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from config.api_cache import get_cached_response, invalidate_namespace, set_cached_response
 from config.pagination import StandardPageNumberPagination
 
 from apps.users.permissions import IsAdminRole, IsLearnerRole
@@ -81,6 +82,21 @@ class ChallengeListCreateView(generics.ListCreateAPIView):
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
+    def list(self, request, *args, **kwargs):
+        cached_response = get_cached_response(request, namespace='challenges')
+        if cached_response is not None:
+            return cached_response
+
+        response = super().list(request, *args, **kwargs)
+        set_cached_response(request, namespace='challenges', response=response)
+        return response
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        if response.status_code < 400:
+            invalidate_namespace('challenges')
+        return response
+
 
 class ChallengeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Challenge.objects.select_related('lesson', 'module', 'category').all()
@@ -94,6 +110,33 @@ class ChallengeDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated(), IsAdminRole()]
+
+    def retrieve(self, request, *args, **kwargs):
+        cached_response = get_cached_response(request, namespace='challenges')
+        if cached_response is not None:
+            return cached_response
+
+        response = super().retrieve(request, *args, **kwargs)
+        set_cached_response(request, namespace='challenges', response=response)
+        return response
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code < 400:
+            invalidate_namespace('challenges')
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        response = super().partial_update(request, *args, **kwargs)
+        if response.status_code < 400:
+            invalidate_namespace('challenges')
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        response = super().destroy(request, *args, **kwargs)
+        if response.status_code < 400:
+            invalidate_namespace('challenges')
+        return response
 
 
 class ChallengeQuestionListCreateView(generics.ListCreateAPIView):
@@ -119,6 +162,16 @@ class ChallengeQuestionListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         challenge = get_object_or_404(Challenge, pk=self.kwargs['challenge_id'])
         serializer.save(challenge=challenge)
+        invalidate_namespace('challenges')
+
+    def list(self, request, *args, **kwargs):
+        cached_response = get_cached_response(request, namespace='challenges')
+        if cached_response is not None:
+            return cached_response
+
+        response = super().list(request, *args, **kwargs)
+        set_cached_response(request, namespace='challenges', response=response)
+        return response
 
 
 class ChallengeQuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -136,6 +189,33 @@ class ChallengeQuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated(), IsAdminRole()]
+
+    def retrieve(self, request, *args, **kwargs):
+        cached_response = get_cached_response(request, namespace='challenges')
+        if cached_response is not None:
+            return cached_response
+
+        response = super().retrieve(request, *args, **kwargs)
+        set_cached_response(request, namespace='challenges', response=response)
+        return response
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code < 400:
+            invalidate_namespace('challenges')
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        response = super().partial_update(request, *args, **kwargs)
+        if response.status_code < 400:
+            invalidate_namespace('challenges')
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        response = super().destroy(request, *args, **kwargs)
+        if response.status_code < 400:
+            invalidate_namespace('challenges')
+        return response
 
 
 def _normalize_answer(value):
@@ -199,19 +279,48 @@ def _upsert_attempt_answers(attempt, answers_payload):
         for question in attempt.challenge.questions.all()
     }
 
+    canonical_answers_by_question_id = {}
+
     for answer_data in answers_payload:
         question_id = answer_data['question_id']
         question = question_map.get(question_id)
         if question is None:
             raise ValueError(f'Question {question_id} does not belong to challenge {attempt.challenge_id}.')
 
-        canonical_answer = _canonicalize_answer_text(question, answer_data)
+        canonical_answers_by_question_id[question_id] = _canonicalize_answer_text(question, answer_data)
 
-        ChallengeAttemptAnswer.objects.update_or_create(
-            attempt=attempt,
-            question_id=question_id,
-            defaults={'answer_text': canonical_answer},
-        )
+    if not canonical_answers_by_question_id:
+        return
+
+    existing_answers = {
+        answer.question_id: answer
+        for answer in attempt.answers.filter(question_id__in=canonical_answers_by_question_id.keys())
+    }
+
+    answers_to_create = []
+    answers_to_update = []
+
+    for question_id, canonical_answer in canonical_answers_by_question_id.items():
+        existing = existing_answers.get(question_id)
+        if existing is None:
+            answers_to_create.append(
+                ChallengeAttemptAnswer(
+                    attempt=attempt,
+                    question_id=question_id,
+                    answer_text=canonical_answer,
+                )
+            )
+            continue
+
+        if existing.answer_text != canonical_answer:
+            existing.answer_text = canonical_answer
+            answers_to_update.append(existing)
+
+    if answers_to_create:
+        ChallengeAttemptAnswer.objects.bulk_create(answers_to_create)
+
+    if answers_to_update:
+        ChallengeAttemptAnswer.objects.bulk_update(answers_to_update, ['answer_text'])
 
 
 def _grade_attempt(attempt):
@@ -219,21 +328,34 @@ def _grade_attempt(attempt):
     answers = list(attempt.answers.select_related('question').all())
     answer_by_question_id = {answer.question_id: answer for answer in answers}
 
+    missing_answers = [
+        ChallengeAttemptAnswer(attempt=attempt, question=question, answer_text='')
+        for question in all_questions
+        if question.id not in answer_by_question_id
+    ]
+    if missing_answers:
+        created_answers = ChallengeAttemptAnswer.objects.bulk_create(missing_answers)
+        for answer in created_answers:
+            answer_by_question_id[answer.question_id] = answer
+
     total_score = 0
     max_score = 0
+    answers_to_update = []
 
     for question in all_questions:
         max_score += question.max_score
-        answer = answer_by_question_id.get(question.id)
-        if answer is None:
-            answer = ChallengeAttemptAnswer.objects.create(attempt=attempt, question=question, answer_text='')
+        answer = answer_by_question_id[question.id]
 
         is_correct = _is_answer_correct(question, answer.answer_text)
         score = question.max_score if is_correct else 0
-        answer.is_correct = is_correct
-        answer.score = score
-        answer.save(update_fields=['is_correct', 'score'])
+        if answer.is_correct != is_correct or answer.score != score:
+            answer.is_correct = is_correct
+            answer.score = score
+            answers_to_update.append(answer)
         total_score += score
+
+    if answers_to_update:
+        ChallengeAttemptAnswer.objects.bulk_update(answers_to_update, ['is_correct', 'score'])
 
     within_time_limit = not attempt.has_expired()
     if within_time_limit and max_score > 0:
@@ -261,8 +383,9 @@ def _grade_attempt(attempt):
     return max_score
 
 
-def _build_submission_response(submission, attempt, replayed=False):
-    max_score = attempt.challenge.questions.aggregate(total=Sum('max_score'))['total'] or 0
+def _build_submission_response(submission, attempt, replayed=False, *, max_score=None):
+    if max_score is None:
+        max_score = attempt.challenge.questions.aggregate(total=Sum('max_score'))['total'] or 0
     response_data = ChallengeSubmissionSerializer(submission).data
     response_data['max_score'] = max_score
     response_data['within_time_limit'] = attempt.is_within_time_limit
@@ -275,9 +398,12 @@ def _build_submission_response(submission, attempt, replayed=False):
         response_data['completion_time_seconds'] = None
     response_data['points_awarded'] = attempt.points_awarded
     response_data['idempotency_replayed'] = replayed
-    response_data['results'] = ChallengeSubmissionResultSerializer(
-        ChallengeAttempt.objects.prefetch_related('answers', 'answers__question').get(pk=attempt.pk)
-    ).data
+    if hasattr(attempt, '_prefetched_objects_cache') and 'answers' in attempt._prefetched_objects_cache:
+        result_attempt = attempt
+    else:
+        result_attempt = ChallengeAttempt.objects.prefetch_related('answers', 'answers__question').get(pk=attempt.pk)
+
+    response_data['results'] = ChallengeSubmissionResultSerializer(result_attempt).data
     return response_data
 
 
@@ -371,7 +497,7 @@ class ChallengeSubmitView(generics.CreateAPIView):
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        _grade_attempt(attempt)
+        max_score = _grade_attempt(attempt)
         submission, _ = ChallengeSubmission.objects.update_or_create(
             attempt=attempt,
             defaults={
@@ -387,7 +513,13 @@ class ChallengeSubmitView(generics.CreateAPIView):
             idempotency_record.submission = submission
             idempotency_record.save(update_fields=['submission', 'updated_at'])
 
-        response_data = _build_submission_response(submission, attempt, replayed=False)
+        hydrated_attempt = ChallengeAttempt.objects.prefetch_related('answers', 'answers__question').get(pk=attempt.pk)
+        response_data = _build_submission_response(
+            submission,
+            hydrated_attempt,
+            replayed=False,
+            max_score=max_score,
+        )
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
@@ -397,7 +529,7 @@ class MyChallengeSubmissionsView(generics.ListAPIView):
     pagination_class = StandardPageNumberPagination
 
     def get_queryset(self):
-        queryset = ChallengeSubmission.objects.select_related('challenge', 'user').filter(user=self.request.user)
+        queryset = ChallengeSubmission.objects.select_related('challenge', 'user', 'attempt').filter(user=self.request.user)
 
         challenge_id = self.request.query_params.get('challenge_id')
         if challenge_id:

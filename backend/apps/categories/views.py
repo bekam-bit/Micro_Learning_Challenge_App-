@@ -1,6 +1,8 @@
 from rest_framework import generics, permissions
+from rest_framework.response import Response
 
 from config.pagination import StandardPageNumberPagination
+from config.api_cache import get_cached_response, invalidate_namespace, set_cached_response
 
 from apps.users.permissions import IsAdminRole
 
@@ -43,12 +45,27 @@ class CategoryListCreateView(generics.ListCreateAPIView):
 		# Annotate module_count efficiently
 		return filtered_queryset.annotate(module_count=Count('modules')).order_by(sort_by, 'name')
 
+	def list(self, request, *args, **kwargs):
+		cached_response = get_cached_response(request, namespace='categories')
+		if cached_response is not None:
+			return cached_response
+
+		response = super().list(request, *args, **kwargs)
+		set_cached_response(request, namespace='categories', response=response)
+		return response
+
+	def create(self, request, *args, **kwargs):
+		response = super().create(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('categories')
+		return response
+
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 	queryset = Category.objects.all()
 
 	def get_queryset(self):
-		queryset = super().get_queryset()
+		queryset = super().get_queryset().prefetch_related('modules')
 		user = self.request.user
 		if user.is_authenticated and getattr(user, 'role', None) == 'admin':
 			return queryset
@@ -63,3 +80,30 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 		if self.request.method in ('PUT', 'PATCH'):
 			return CategoryWriteSerializer
 		return CategoryDetailSerializer
+
+	def retrieve(self, request, *args, **kwargs):
+		cached_response = get_cached_response(request, namespace='categories')
+		if cached_response is not None:
+			return cached_response
+
+		response = super().retrieve(request, *args, **kwargs)
+		set_cached_response(request, namespace='categories', response=response)
+		return response
+
+	def update(self, request, *args, **kwargs):
+		response = super().update(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('categories')
+		return response
+
+	def partial_update(self, request, *args, **kwargs):
+		response = super().partial_update(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('categories')
+		return response
+
+	def destroy(self, request, *args, **kwargs):
+		response = super().destroy(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('categories')
+		return response

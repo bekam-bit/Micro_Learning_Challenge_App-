@@ -15,6 +15,11 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_LEARNER)
     date_joined = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['role', 'is_active'], name='user_role_active_idx'),
+        ]
+
     def save(self, *args, **kwargs):
         if self.is_superuser:
             self.role = self.ROLE_ADMIN

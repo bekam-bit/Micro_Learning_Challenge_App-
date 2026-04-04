@@ -29,6 +29,10 @@ class Module(models.Model):
     class Meta:
         ordering = ['title']
         unique_together = ('category', 'title')
+        indexes = [
+            models.Index(fields=['category', 'created_at'], name='module_cat_created_idx'),
+            models.Index(fields=['category', 'updated_at'], name='module_cat_updated_idx'),
+        ]
 
     def __str__(self):
         return self.title
@@ -55,6 +59,9 @@ class ModuleEnrollment(models.Model):
             ),
         ]
         ordering = ['-enrolled_at']
+        indexes = [
+            models.Index(fields=['user', 'enrolled_at'], name='mod_enroll_user_time_idx'),
+        ]
 
     def __str__(self):
         return f'{self.user} enrolled in {self.module}'

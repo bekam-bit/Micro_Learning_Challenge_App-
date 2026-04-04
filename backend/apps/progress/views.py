@@ -1,5 +1,6 @@
 from datetime import datetime, time
 
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import filters, generics, permissions
@@ -45,6 +46,35 @@ def _apply_updated_at_range(queryset, query_params):
 	return queryset
 
 
+def _build_progress_summary(queryset):
+	aggregate_data = queryset.aggregate(
+		challenges_total=Count('id', filter=Q(challenge__isnull=False)),
+		challenges_completed=Count('id', filter=Q(challenge__isnull=False, completed=True)),
+		lessons_total=Count('id', filter=Q(lesson__isnull=False)),
+		lessons_completed=Count('id', filter=Q(lesson__isnull=False, completed=True)),
+		modules_total=Count('id', filter=Q(module__isnull=False)),
+		modules_completed=Count('id', filter=Q(module__isnull=False, completed=True)),
+		challenge_points_earned=Sum('points_earned', filter=Q(challenge__isnull=False)),
+	)
+
+	def summarize(total, completed):
+		total = int(total or 0)
+		completed = int(completed or 0)
+		percentage = round((completed / total) * 100, 2) if total else 0.0
+		return {
+			'completed': completed,
+			'total': total,
+			'percentage': percentage,
+		}
+
+	return {
+		'challenges': summarize(aggregate_data['challenges_total'], aggregate_data['challenges_completed']),
+		'lessons': summarize(aggregate_data['lessons_total'], aggregate_data['lessons_completed']),
+		'modules': summarize(aggregate_data['modules_total'], aggregate_data['modules_completed']),
+		'points_earned': int(aggregate_data['challenge_points_earned'] or 0),
+	}
+
+
 class UserProgressListView(generics.ListAPIView):
 	serializer_class = UserProgressSerializer
 	permission_classes = [permissions.IsAuthenticated]
@@ -73,31 +103,7 @@ class UserProgressSummaryView(APIView):
 
 	def get(self, request):
 		queryset = UserProgress.objects.filter(user=request.user)
-
-		challenge_qs = queryset.filter(challenge__isnull=False)
-		lesson_qs = queryset.filter(lesson__isnull=False)
-		module_qs = queryset.filter(module__isnull=False)
-
-		def summarize(items):
-			total = items.count()
-			completed_count = items.filter(completed=True).count()
-			if total == 0:
-				percentage = 0.0
-			else:
-				percentage = round((completed_count / total) * 100, 2)
-			return {
-				'completed': completed_count,
-				'total': total,
-				'percentage': percentage,
-			}
-
-		payload = {
-			'challenges': summarize(challenge_qs),
-			'lessons': summarize(lesson_qs),
-			'modules': summarize(module_qs),
-			'points_earned': sum(challenge_qs.values_list('points_earned', flat=True)),
-		}
-		return Response(payload)
+		return Response(_build_progress_summary(queryset))
 
 
 class AdminUserProgressListView(generics.ListAPIView):
@@ -167,28 +173,6 @@ class AdminUserProgressSummaryView(APIView):
 		elif owner_type == 'module':
 			queryset = queryset.filter(module__isnull=False)
 
-		challenge_qs = queryset.filter(challenge__isnull=False)
-		lesson_qs = queryset.filter(lesson__isnull=False)
-		module_qs = queryset.filter(module__isnull=False)
-
-		def summarize(items):
-			total = items.count()
-			completed_count = items.filter(completed=True).count()
-			if total == 0:
-				percentage = 0.0
-			else:
-				percentage = round((completed_count / total) * 100, 2)
-			return {
-				'completed': completed_count,
-				'total': total,
-				'percentage': percentage,
-			}
-
-		payload = {
-			'users_tracked': queryset.values('user_id').distinct().count(),
-			'challenges': summarize(challenge_qs),
-			'lessons': summarize(lesson_qs),
-			'modules': summarize(module_qs),
-			'points_earned': sum(challenge_qs.values_list('points_earned', flat=True)),
-		}
+		payload = _build_progress_summary(queryset)
+		payload['users_tracked'] = queryset.values('user_id').distinct().count()
 		return Response(payload)

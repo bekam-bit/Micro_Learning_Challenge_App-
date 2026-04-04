@@ -13,6 +13,10 @@ class Category(models.Model):
 
     class Meta:
         ordering = ['display_order', 'name']
+        indexes = [
+            models.Index(fields=['is_active', 'display_order', 'name'], name='cat_active_order_idx'),
+            models.Index(fields=['created_at'], name='cat_created_idx'),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.slug:

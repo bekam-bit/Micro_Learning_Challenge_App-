@@ -30,6 +30,11 @@ class PointTransaction(models.Model):
             )
         ]
         ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['source_type', 'source_id'], name='pt_source_lookup_idx'),
+            models.Index(fields=['user', 'created_at'], name='pt_user_created_idx'),
+            models.Index(fields=['created_at'], name='pt_created_idx'),
+        ]
 
     def __str__(self):
         return f'{self.user} {self.points} ({self.source_type}:{self.source_id})'

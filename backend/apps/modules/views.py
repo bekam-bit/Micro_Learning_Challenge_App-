@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
+from config.api_cache import get_cached_response, invalidate_namespace, set_cached_response
 from config.pagination import StandardPageNumberPagination
 
 from apps.progress.models import UserProgress
@@ -80,6 +81,21 @@ class ModuleListCreateView(generics.ListCreateAPIView):
 			return [permissions.AllowAny()]
 		return [permissions.IsAuthenticated(), IsAdminRole()]
 
+	def list(self, request, *args, **kwargs):
+		cached_response = get_cached_response(request, namespace='modules')
+		if cached_response is not None:
+			return cached_response
+
+		response = super().list(request, *args, **kwargs)
+		set_cached_response(request, namespace='modules', response=response)
+		return response
+
+	def create(self, request, *args, **kwargs):
+		response = super().create(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('modules')
+		return response
+
 
 class ModuleDetailView(generics.RetrieveUpdateDestroyAPIView):
 	queryset = Module.objects.select_related('category').all()
@@ -98,6 +114,33 @@ class ModuleDetailView(generics.RetrieveUpdateDestroyAPIView):
 			return [permissions.AllowAny()]
 		return [permissions.IsAuthenticated(), IsAdminRole()]
 
+	def retrieve(self, request, *args, **kwargs):
+		cached_response = get_cached_response(request, namespace='modules')
+		if cached_response is not None:
+			return cached_response
+
+		response = super().retrieve(request, *args, **kwargs)
+		set_cached_response(request, namespace='modules', response=response)
+		return response
+
+	def update(self, request, *args, **kwargs):
+		response = super().update(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('modules')
+		return response
+
+	def partial_update(self, request, *args, **kwargs):
+		response = super().partial_update(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('modules')
+		return response
+
+	def destroy(self, request, *args, **kwargs):
+		response = super().destroy(request, *args, **kwargs)
+		if response.status_code < 400:
+			invalidate_namespace('modules')
+		return response
+
 
 class ModuleEnrollView(APIView):
 	permission_classes = [permissions.IsAuthenticated]
@@ -108,6 +151,7 @@ class ModuleEnrollView(APIView):
 			user=request.user,
 			module=module,
 		)
+		invalidate_namespace('modules')
 		status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
 		return Response(
 			{

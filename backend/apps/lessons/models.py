@@ -18,6 +18,10 @@ class Lesson(models.Model):
 
     class Meta:
         ordering = ['order', 'title']
+        indexes = [
+            models.Index(fields=['module', 'title'], name='lesson_module_title_idx'),
+            models.Index(fields=['module', 'updated_at'], name='lesson_module_upd_idx'),
+        ]
 
     def __str__(self):
         return self.title
