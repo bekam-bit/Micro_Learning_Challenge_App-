@@ -37,7 +37,7 @@ Enrollment endpoint:
 | --- | --- | --- | --- | --- |
 | `/api/modules/<id>/enroll/` | `POST` | Yes | authenticated user | Enroll learner to module (idempotent: first call `201`, repeat `200`). |
 
-### Streak System (Challenge + Daily-Challenge Ready)
+### Streak System (Challenge Active, Daily-Challenge Hook Ready)
 
 - Streak logic is centralized in user services (single source of truth).
 - On successful challenge submission:
@@ -46,7 +46,7 @@ Enrollment endpoint:
 	- updates `last_activity_date`
 	- records same-day activity in `UserDailyActivity` for Knowledge Momentum.
 - If `current_streak > max_streak`, max streak is normalized to current streak before daily recompute.
-- Daily challenge integration can call the same streak service wrapper when that API is implemented.
+- Daily challenge API flow is not implemented yet. A shared service hook is ready for integration once daily challenge completion endpoints are added.
 
 Profile payload now includes:
 
@@ -60,7 +60,15 @@ Profile payload now includes:
 
 ## Backend API Endpoints Available for Integration
 
-Base prefix: `/api/auth/`
+Base prefixes:
+
+- `/api/auth/`
+- `/api/categories/`
+- `/api/modules/`
+- `/api/lessons/`
+- `/api/challenges/`
+- `/api/progress/`
+- `/api/points/`
 
 Authentication type: JWT Bearer token
 
@@ -135,7 +143,20 @@ The profile endpoint includes:
 - `sort_by`: Sort by `title`, `-title`, `created_at`, `-created_at`, `updated_at`, `-updated_at`.
 
 **Response fields:**
-- id, category, title, description, created_at, updated_at
+- id
+- category
+- title
+- description
+- status
+- level
+- estimated_time
+- prerequisites
+- module_action
+- module_progress_percent
+- module_completed_parts
+- module_total_parts
+- created_at
+- updated_at
 
 ---
 
