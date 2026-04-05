@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/modules/', include('apps.modules.urls')),
     path('api/lessons/', include('apps.lessons.urls')),
     path('api/challenges/', include('apps.challenges.urls')),
+    path('api/daily-challenges/', include('apps.daily_challenge.urls')),
     path('api/progress/', include('apps.progress.urls')),
     path('api/points/', include('apps.points.urls')),
     path('api/quiz/', include('apps.quiz.urls')),

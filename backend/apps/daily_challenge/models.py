@@ -1,9 +1,12 @@
 from django.db import models
 from apps.challenges.models import Challenge
 
-class DailyChallenge(models.Model):
-    challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, related_name='daily_entries')
+
+class DailyChallenge(Challenge):
     date = models.DateField(unique=True)
 
+    class Meta:
+        ordering = ['-date', '-id']
+
     def __str__(self):
-        return f"{self.date} - {self.challenge.title}"
+        return f"{self.date} - {self.title}"

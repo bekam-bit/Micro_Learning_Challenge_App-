@@ -35,12 +35,17 @@ from .serializers import (
 
 
 class ChallengeListCreateView(generics.ListCreateAPIView):
-    queryset = Challenge.objects.select_related('lesson', 'module', 'category').all()
+    is_daily_scope = False
+    cache_namespace = 'challenges'
+    queryset = Challenge.objects.select_related('lesson', 'module', 'category').filter(is_daily=False)
     serializer_class = ChallengeSerializer
     pagination_class = StandardPageNumberPagination
 
+    def get_base_queryset(self):
+        return Challenge.objects.select_related('lesson', 'module', 'category').filter(is_daily=self.is_daily_scope)
+
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = self.get_base_queryset()
 
         scope = self.request.query_params.get('scope')
         if scope == 'lesson':
@@ -83,23 +88,31 @@ class ChallengeListCreateView(generics.ListCreateAPIView):
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def list(self, request, *args, **kwargs):
-        cached_response = get_cached_response(request, namespace='challenges')
+        cached_response = get_cached_response(request, namespace=self.cache_namespace)
         if cached_response is not None:
             return cached_response
 
         response = super().list(request, *args, **kwargs)
-        set_cached_response(request, namespace='challenges', response=response)
+        set_cached_response(request, namespace=self.cache_namespace, response=response)
         return response
 
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
         if response.status_code < 400:
-            invalidate_namespace('challenges')
+            invalidate_namespace(self.cache_namespace)
         return response
 
 
 class ChallengeDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Challenge.objects.select_related('lesson', 'module', 'category').all()
+    is_daily_scope = False
+    cache_namespace = 'challenges'
+    queryset = Challenge.objects.select_related('lesson', 'module', 'category').filter(is_daily=False)
+
+    def get_base_queryset(self):
+        return Challenge.objects.select_related('lesson', 'module', 'category').filter(is_daily=self.is_daily_scope)
+
+    def get_queryset(self):
+        return self.get_base_queryset()
 
     def get_serializer_class(self):
         if self.request.method in permissions.SAFE_METHODS:
@@ -112,35 +125,40 @@ class ChallengeDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def retrieve(self, request, *args, **kwargs):
-        cached_response = get_cached_response(request, namespace='challenges')
+        cached_response = get_cached_response(request, namespace=self.cache_namespace)
         if cached_response is not None:
             return cached_response
 
         response = super().retrieve(request, *args, **kwargs)
-        set_cached_response(request, namespace='challenges', response=response)
+        set_cached_response(request, namespace=self.cache_namespace, response=response)
         return response
 
     def update(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
         if response.status_code < 400:
-            invalidate_namespace('challenges')
+            invalidate_namespace(self.cache_namespace)
         return response
 
     def partial_update(self, request, *args, **kwargs):
         response = super().partial_update(request, *args, **kwargs)
         if response.status_code < 400:
-            invalidate_namespace('challenges')
+            invalidate_namespace(self.cache_namespace)
         return response
 
     def destroy(self, request, *args, **kwargs):
         response = super().destroy(request, *args, **kwargs)
         if response.status_code < 400:
-            invalidate_namespace('challenges')
+            invalidate_namespace(self.cache_namespace)
         return response
 
 
 class ChallengeQuestionListCreateView(generics.ListCreateAPIView):
+    is_daily_scope = False
+    cache_namespace = 'challenges'
     pagination_class = StandardPageNumberPagination
+
+    def get_challenge_queryset(self):
+        return Challenge.objects.filter(is_daily=self.is_daily_scope)
 
     def get_queryset(self):
         challenge_id = self.kwargs['challenge_id']
@@ -160,22 +178,23 @@ class ChallengeQuestionListCreateView(generics.ListCreateAPIView):
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def perform_create(self, serializer):
-        challenge = get_object_or_404(Challenge, pk=self.kwargs['challenge_id'])
+        challenge = get_object_or_404(self.get_challenge_queryset(), pk=self.kwargs['challenge_id'])
         serializer.save(challenge=challenge)
-        invalidate_namespace('challenges')
+        invalidate_namespace(self.cache_namespace)
 
     def list(self, request, *args, **kwargs):
-        cached_response = get_cached_response(request, namespace='challenges')
+        cached_response = get_cached_response(request, namespace=self.cache_namespace)
         if cached_response is not None:
             return cached_response
 
         response = super().list(request, *args, **kwargs)
-        set_cached_response(request, namespace='challenges', response=response)
+        set_cached_response(request, namespace=self.cache_namespace, response=response)
         return response
 
 
 class ChallengeQuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = ChallengeQuestion.objects.select_related('challenge').all()
+    cache_namespace = 'challenges'
+    queryset = ChallengeQuestion.objects.select_related('challenge').filter(challenge__is_daily=False)
 
     def get_serializer_class(self):
         user = self.request.user
@@ -191,30 +210,30 @@ class ChallengeQuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def retrieve(self, request, *args, **kwargs):
-        cached_response = get_cached_response(request, namespace='challenges')
+        cached_response = get_cached_response(request, namespace=self.cache_namespace)
         if cached_response is not None:
             return cached_response
 
         response = super().retrieve(request, *args, **kwargs)
-        set_cached_response(request, namespace='challenges', response=response)
+        set_cached_response(request, namespace=self.cache_namespace, response=response)
         return response
 
     def update(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
         if response.status_code < 400:
-            invalidate_namespace('challenges')
+            invalidate_namespace(self.cache_namespace)
         return response
 
     def partial_update(self, request, *args, **kwargs):
         response = super().partial_update(request, *args, **kwargs)
         if response.status_code < 400:
-            invalidate_namespace('challenges')
+            invalidate_namespace(self.cache_namespace)
         return response
 
     def destroy(self, request, *args, **kwargs):
         response = super().destroy(request, *args, **kwargs)
         if response.status_code < 400:
-            invalidate_namespace('challenges')
+            invalidate_namespace(self.cache_namespace)
         return response
 
 
@@ -408,10 +427,14 @@ def _build_submission_response(submission, attempt, replayed=False, *, max_score
 
 
 class ChallengeProgressView(APIView):
+    is_daily_scope = False
     permission_classes = [permissions.IsAuthenticated, IsLearnerRole]
 
+    def get_challenge_or_404(self, challenge_id):
+        return get_object_or_404(Challenge.objects.filter(is_daily=self.is_daily_scope), pk=challenge_id)
+
     def get(self, request, challenge_id):
-        challenge = get_object_or_404(Challenge, pk=challenge_id)
+        challenge = self.get_challenge_or_404(challenge_id)
         attempt = ChallengeAttempt.objects.filter(challenge=challenge, user=request.user).prefetch_related(
             'answers', 'answers__question'
         ).first()
@@ -424,7 +447,7 @@ class ChallengeProgressView(APIView):
 
     @transaction.atomic
     def post(self, request, challenge_id):
-        challenge = get_object_or_404(Challenge, pk=challenge_id)
+        challenge = self.get_challenge_or_404(challenge_id)
         serializer = ChallengeProgressUpsertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -456,11 +479,15 @@ class ChallengeProgressView(APIView):
 
 
 class ChallengeSubmitView(generics.CreateAPIView):
+    is_daily_scope = False
     permission_classes = [permissions.IsAuthenticated, IsLearnerRole]
+
+    def get_challenge_or_404(self, challenge_id):
+        return get_object_or_404(Challenge.objects.filter(is_daily=self.is_daily_scope), pk=challenge_id)
 
     @transaction.atomic
     def post(self, request, challenge_id):
-        challenge = get_object_or_404(Challenge, pk=challenge_id)
+        challenge = self.get_challenge_or_404(challenge_id)
         payload_serializer = ChallengeProgressUpsertSerializer(data=request.data)
         payload_serializer.is_valid(raise_exception=True)
         idempotency_key = request.headers.get('X-Idempotency-Key')
@@ -524,12 +551,16 @@ class ChallengeSubmitView(generics.CreateAPIView):
 
 
 class MyChallengeSubmissionsView(generics.ListAPIView):
+    is_daily_scope = False
     serializer_class = ChallengeSubmissionSerializer
     permission_classes = [permissions.IsAuthenticated, IsLearnerRole]
     pagination_class = StandardPageNumberPagination
 
     def get_queryset(self):
-        queryset = ChallengeSubmission.objects.select_related('challenge', 'user', 'attempt').filter(user=self.request.user)
+        queryset = ChallengeSubmission.objects.select_related('challenge', 'user', 'attempt').filter(
+            user=self.request.user,
+            challenge__is_daily=self.is_daily_scope,
+        )
 
         challenge_id = self.request.query_params.get('challenge_id')
         if challenge_id:

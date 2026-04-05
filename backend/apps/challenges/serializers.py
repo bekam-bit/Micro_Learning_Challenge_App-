@@ -19,6 +19,7 @@ class ChallengeSerializer(serializers.ModelSerializer):
         model = Challenge
         fields = [
             'id',
+            'is_daily',
             'title',
             'description',
             'difficulty',
@@ -31,7 +32,7 @@ class ChallengeSerializer(serializers.ModelSerializer):
             'scope',
             'scope_display',
         ]
-        read_only_fields = ['id', 'scope', 'scope_display']
+        read_only_fields = ['id', 'is_daily', 'scope', 'scope_display']
 
     def get_scope(self, obj):
         return obj.get_scope()
@@ -40,6 +41,9 @@ class ChallengeSerializer(serializers.ModelSerializer):
         return obj.get_scope_display()
 
     def validate(self, attrs):
+        if attrs.get('is_daily', False):
+            raise serializers.ValidationError('Daily challenges must be created through the daily challenge endpoint.')
+
         lesson = attrs.get('lesson', getattr(self.instance, 'lesson', None) if self.instance else None)
         module = attrs.get('module', getattr(self.instance, 'module', None) if self.instance else None)
         category = attrs.get('category', getattr(self.instance, 'category', None) if self.instance else None)

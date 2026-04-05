@@ -8,6 +8,7 @@ Base route prefixes:
 - `/api/modules/`
 - `/api/lessons/`
 - `/api/challenges/`
+- `/api/daily-challenges/`
 - `/api/quiz/`
 - `/api/progress/`
 - `/api/points/`
@@ -557,7 +558,48 @@ Response:
 }
 ```
 
-## 7. Progress
+## 7. Daily Challenges
+
+Daily challenges extend challenge logic through model/view inheritance and are date-based (not bound to lesson/module/category).
+
+### Endpoints
+
+| Endpoint | Methods | Auth Required | Role Required | Description |
+| --- | --- | --- | --- | --- |
+| `/api/daily-challenges/` | `GET` | Yes | Authenticated | List daily challenges with optional date filtering and sorting. |
+| `/api/daily-challenges/` | `POST` | Yes | Admin | Create a daily challenge (auto-sets `is_daily=true`). |
+| `/api/daily-challenges/today/` | `GET` | Yes | Authenticated | Get daily challenge for today or a requested date. |
+| `/api/daily-challenges/<id>/` | `GET` | Yes | Authenticated | Retrieve one daily challenge with questions. |
+| `/api/daily-challenges/<id>/` | `PUT`, `PATCH`, `DELETE` | Yes | Admin | Update or delete a daily challenge. |
+| `/api/daily-challenges/<id>/questions/` | `GET` | Yes | Authenticated | List questions for a daily challenge. |
+| `/api/daily-challenges/<id>/questions/` | `POST` | Yes | Admin | Add question to a daily challenge. |
+| `/api/daily-challenges/questions/<id>/` | `GET` | Yes | Authenticated | Retrieve one question. |
+| `/api/daily-challenges/questions/<id>/` | `PUT`, `PATCH`, `DELETE` | Yes | Admin | Update or delete a question. |
+| `/api/daily-challenges/<id>/progress/` | `GET`, `POST` | Yes | Learner | Save/retrieve in-progress answers. |
+| `/api/daily-challenges/<id>/submit/` | `POST` | Yes | Learner | Submit answers for grading and scoring. |
+| `/api/daily-challenges/submissions/me/` | `GET` | Yes | Learner | List current learner's daily challenge submissions. |
+
+### Rules
+
+- Daily challenges require `date`.
+- Daily challenges cannot set `lesson`, `module`, or `category`.
+- Daily challenge records are isolated from regular challenge endpoints (`/api/challenges/`).
+
+### Query Params
+
+`GET /api/daily-challenges/`
+- `difficulty` optional enum: `easy`, `medium`, `hard`
+- `date` optional `YYYY-MM-DD`
+- `search` optional string (title contains)
+- `sort_by` optional enum: `date`, `-date`, `title`, `-title`, `points`, `-points`, `created_at`, `-created_at`
+
+`GET /api/daily-challenges/today/`
+- `date` optional `YYYY-MM-DD`; if omitted, backend resolves to current local date
+
+`GET /api/daily-challenges/submissions/me/`
+- `challenge_id` optional integer filter
+
+## 8. Progress
 
 ### Endpoints
 
@@ -679,7 +721,7 @@ Settings:
 Behavior:
 - Logs warnings when request query count or elapsed time crosses thresholds.
 
-## 8. Points
+## 9. Points
 
 ### Endpoints
 

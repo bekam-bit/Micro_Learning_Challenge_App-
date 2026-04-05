@@ -22,6 +22,7 @@ class Challenge(models.Model):
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES)
     points = models.PositiveIntegerField(default=10)
     time_limit_minutes = models.PositiveIntegerField(default=30)
+    is_daily = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     lesson = models.ForeignKey(
         Lesson,
@@ -49,19 +50,28 @@ class Challenge(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    Q(lesson__isnull=False, module__isnull=True, category__isnull=True)
-                    | Q(lesson__isnull=True, module__isnull=False, category__isnull=True)
-                    | Q(lesson__isnull=True, module__isnull=True, category__isnull=False)
+                    (
+                        Q(is_daily=False)
+                        & (
+                            Q(lesson__isnull=False, module__isnull=True, category__isnull=True)
+                            | Q(lesson__isnull=True, module__isnull=False, category__isnull=True)
+                            | Q(lesson__isnull=True, module__isnull=True, category__isnull=False)
+                        )
+                    )
+                    | Q(is_daily=True, lesson__isnull=True, module__isnull=True, category__isnull=True)
                 ),
-                name='challenge_exactly_one_owner',
+                name='challenge_owner_rule_with_daily',
             )
         ]
         indexes = [
+            models.Index(fields=['is_daily', 'created_at'], name='challenge_daily_ct_idx'),
             models.Index(fields=['difficulty', 'created_at'], name='challenge_diff_ct_idx'),
             models.Index(fields=['created_at'], name='challenge_created_idx'),
         ]
 
     def get_scope(self):
+        if self.is_daily:
+            return 'daily'
         if self.lesson_id:
             return 'lesson'
         if self.module_id:
