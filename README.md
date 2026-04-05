@@ -784,3 +784,105 @@ Response:
 	]
 }
 ```
+
+## 10. Notifications
+
+### Frontend Hookup Endpoints
+
+| Endpoint | Method | Auth Required | Description |
+| --- | --- | --- | --- |
+| `/api/notifications/` | `GET` | Yes | List current user's notifications for notification panel. |
+| `/api/notifications/<id>/read/` | `POST` | Yes | Mark one notification as read. |
+| `/api/notifications/read-all/` | `POST` | Yes | Mark all current user's notifications as read. |
+
+### Notification List Query Params
+
+`GET /api/notifications/`
+- `is_read` optional boolean-like value: `true/false`, `1/0`, `yes/no`
+- `page`, `page_size`
+
+### Notification List Response Fields
+
+Top-level response:
+- `count`, `next`, `previous`, `results`
+- `unread_count`
+
+Notification item fields:
+- `id`
+- `message`
+- `is_read`
+- `created_at`
+- `day_bucket`: `today` | `yesterday` | `earlier`
+- `day_tag`: `Today` | `Yesterday` | `YYYY-MM-DD`
+- `day_date`: `YYYY-MM-DD` (group key for UI sections)
+
+### Sample: List Notifications
+
+Request:
+```http
+GET /api/notifications/?is_read=false&page=1&page_size=12
+Authorization: Bearer <access_token>
+```
+
+Response:
+```json
+{
+	"count": 2,
+	"next": null,
+	"previous": null,
+	"unread_count": 2,
+	"results": [
+		{
+			"id": 91,
+			"message": "New daily challenge is available for 2026-04-05: \"Python Sprint\".",
+			"is_read": false,
+			"created_at": "2026-04-05T08:40:02Z",
+			"day_bucket": "today",
+			"day_tag": "Today",
+			"day_date": "2026-04-05"
+		}
+	]
+}
+```
+
+### Sample: Mark One As Read
+
+Request:
+```http
+POST /api/notifications/91/read/
+Authorization: Bearer <access_token>
+```
+
+Response:
+```json
+{
+	"detail": "Notification marked as read."
+}
+```
+
+### Sample: Mark All As Read
+
+Request:
+```http
+POST /api/notifications/read-all/
+Authorization: Bearer <access_token>
+```
+
+Response:
+```json
+{
+	"detail": "All notifications marked as read.",
+	"updated_count": 3
+}
+```
+
+### Admin Setup: Retention Days
+
+Retention is controlled from Django Admin using `NotificationRetentionSetting`:
+- `enabled` (boolean)
+- `retention_days` (N days)
+
+Behavior:
+- System auto-removes read notifications older than `retention_days`.
+- Unread notifications are preserved.
+- A default singleton settings row is seeded automatically by migration.

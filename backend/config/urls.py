@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/progress/', include('apps.progress.urls')),
     path('api/points/', include('apps.points.urls')),
     path('api/quiz/', include('apps.quiz.urls')),
+    path('api/notifications/', include('apps.notifications.urls')),
 ]
 
 if settings.DEBUG:
