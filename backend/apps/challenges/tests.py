@@ -80,7 +80,7 @@ class ChallengeAPITests(APITestCase):
 		response = self.client.post('/api/challenges/', payload, format='json')
 		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-	def test_public_can_view_challenges(self):
+	def test_authenticated_user_can_view_challenges(self):
 		self.client.force_authenticate(user=self.admin_user)
 		create_response = self.client.post(
 			'/api/challenges/',
@@ -95,7 +95,7 @@ class ChallengeAPITests(APITestCase):
 			format='json',
 		)
 		self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
-		self.client.force_authenticate(user=None)
+		self.client.force_authenticate(user=self.learner_user)
 
 		response = self.client.get('/api/challenges/')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -134,7 +134,7 @@ class ChallengeAPITests(APITestCase):
 		self.assertEqual(older.status_code, status.HTTP_201_CREATED)
 		self.assertEqual(newer.status_code, status.HTTP_201_CREATED)
 
-		self.client.force_authenticate(user=None)
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get('/api/challenges/')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(response.data['results'][0]['id'], newer.data['id'])

@@ -31,19 +31,28 @@ class CategoryAPITests(APITestCase):
 			password='StrongPass123!',
 			role=User.ROLE_ADMIN,
 		)
+		self.learner_user = User.objects.create_user(
+			username='learner_user',
+			email='learner@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
 
-	def test_public_category_list_shows_only_active(self):
+	def test_authenticated_category_list_shows_only_active(self):
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get('/api/categories/')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		names = [item['name'] for item in response.data['results']]
 		self.assertIn(self.active_category.name, names)
 		self.assertNotIn(self.inactive_category.name, names)
 
-	def test_public_category_detail_hides_inactive(self):
+	def test_authenticated_category_detail_hides_inactive(self):
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get(f'/api/categories/{self.inactive_category.id}/')
 		self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 	def test_category_list_search_and_sort(self):
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get('/api/categories/?search=backend&sort_by=name')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		results = response.data['results']

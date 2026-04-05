@@ -18,7 +18,7 @@ class CategoryListCreateView(generics.ListCreateAPIView):
 	def get_permissions(self):
 		if self.request.method == 'POST':
 			return [permissions.IsAuthenticated(), IsAdminRole()]
-		return [permissions.AllowAny()]
+		return [permissions.IsAuthenticated()]
 
 	def get_serializer_class(self):
 		if self.request.method == 'POST':
@@ -73,7 +73,7 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 	def get_permissions(self):
 		if self.request.method in permissions.SAFE_METHODS:
-			return [permissions.AllowAny()]
+			return [permissions.IsAuthenticated()]
 		return [permissions.IsAuthenticated(), IsAdminRole()]
 
 	def get_serializer_class(self):

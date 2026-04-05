@@ -37,12 +37,14 @@ class LessonAPITestCase(APITestCase):
 		self.detail_url = reverse('lesson_detail', args=[self.lesson.id])
 
 	def test_lesson_list_pagination(self):
+		self.client.force_authenticate(user=self.user)
 		response = self.client.get(self.list_url)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertIn('results', response.data)
 		self.assertGreaterEqual(len(response.data['results']), 1)
 
 	def test_lesson_detail_access_active_module(self):
+		self.client.force_authenticate(user=self.user)
 		response = self.client.get(self.detail_url)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(response.data['id'], self.lesson.id)

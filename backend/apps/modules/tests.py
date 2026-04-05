@@ -9,7 +9,8 @@ from .models import Module, ModuleEnrollment
 
 User = get_user_model()
 class ModuleAPITests(APITestCase):
-	def test_public_module_detail_hides_inactive_category_module(self):
+	def test_authenticated_module_detail_hides_inactive_category_module(self):
+		self.client.force_authenticate(user=self.learner_user)
 		# Should return 404 for module in inactive category
 		response = self.client.get(f'/api/modules/{self.hidden_module.id}/')
 		self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -47,8 +48,15 @@ class ModuleAPITests(APITestCase):
 			password='StrongPass123!',
 			role=User.ROLE_ADMIN,
 		)
+		self.learner_user = User.objects.create_user(
+			username='learner_modules',
+			email='learner_modules@example.com',
+			password='StrongPass123!',
+			role=User.ROLE_LEARNER,
+		)
 
-	def test_public_module_list_hides_inactive_category_modules(self):
+	def test_authenticated_module_list_hides_inactive_category_modules(self):
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get('/api/modules/')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		titles = [item['title'] for item in response.data['results']]
@@ -56,6 +64,7 @@ class ModuleAPITests(APITestCase):
 		self.assertNotIn(self.hidden_module.title, titles)
 
 	def test_module_list_filters_by_category_id(self):
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get(f'/api/modules/?category_id={self.active_category.id}')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		results = response.data['results']
@@ -68,6 +77,7 @@ class ModuleAPITests(APITestCase):
 			title='API Design',
 			description='Design APIs',
 		)
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get('/api/modules/?search=api&sort_by=-title')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		results = response.data['results']
@@ -85,7 +95,8 @@ class ModuleAPITests(APITestCase):
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 		self.assertTrue(Module.objects.filter(title='Python Foundations', category=self.active_category).exists())
 
-	def test_public_module_list_returns_enroll_action_for_active_module(self):
+	def test_authenticated_module_list_returns_enroll_action_for_active_module(self):
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get('/api/modules/')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		first = next(item for item in response.data['results'] if item['id'] == self.active_module.id)
@@ -98,6 +109,7 @@ class ModuleAPITests(APITestCase):
 			description='Soon',
 			status='coming_soon',
 		)
+		self.client.force_authenticate(user=self.learner_user)
 		response = self.client.get('/api/modules/')
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		item = next(result for result in response.data['results'] if result['id'] == coming_soon_module.id)

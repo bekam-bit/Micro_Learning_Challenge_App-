@@ -79,7 +79,7 @@ class ChallengeListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.AllowAny()]
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def list(self, request, *args, **kwargs):
@@ -108,7 +108,7 @@ class ChallengeDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.AllowAny()]
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def retrieve(self, request, *args, **kwargs):
@@ -156,7 +156,7 @@ class ChallengeQuestionListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.AllowAny()]
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def perform_create(self, serializer):
@@ -187,7 +187,7 @@ class ChallengeQuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.AllowAny()]
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), IsAdminRole()]
 
     def retrieve(self, request, *args, **kwargs):

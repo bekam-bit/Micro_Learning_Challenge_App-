@@ -20,7 +20,7 @@ class LessonListCreateView(generics.ListCreateAPIView):
 
 	def get_permissions(self):
 		if self.request.method in permissions.SAFE_METHODS:
-			return [permissions.AllowAny()]
+			return [permissions.IsAuthenticated()]
 		return [permissions.IsAuthenticated(), IsAdminRole()]
 
 	def list(self, request, *args, **kwargs):
@@ -51,7 +51,7 @@ class LessonDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 	def get_permissions(self):
 		if self.request.method in permissions.SAFE_METHODS:
-			return [permissions.AllowAny()]
+			return [permissions.IsAuthenticated()]
 		return [permissions.IsAuthenticated(), IsAdminRole()]
 
 	def retrieve(self, request, *args, **kwargs):
