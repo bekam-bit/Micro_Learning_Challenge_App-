@@ -41,6 +41,17 @@ class LessonListCreateView(generics.ListCreateAPIView):
 class LessonDetailView(generics.RetrieveUpdateDestroyAPIView):
 	serializer_class = LessonSerializer
 
+	def get_serializer_context(self):
+		context = super().get_serializer_context()
+		include_value = self.request.query_params.get('include', '')
+		include_parts = {
+			part.strip().lower()
+			for part in include_value.split(',')
+			if part.strip()
+		}
+		context['include_knowledge_check'] = 'knowledge_check' in include_parts
+		return context
+
 	def get_queryset(self):
 		queryset = Lesson.objects.all()
 		user = self.request.user

@@ -6,6 +6,11 @@ from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.categories.models import Category
+from apps.lessons.models import Lesson
+from apps.modules.models import Module
+from apps.progress.models import UserProgress
+from apps.quiz.models import Quiz, QuizSubmission
 from apps.users.models import UserDailyActivity, UserProfile
 from apps.users.services import (
 	register_challenge_completion_activity,
@@ -135,6 +140,49 @@ class AuthApiTests(APITestCase):
 		self.assertIn("knowledge_momentum", me_response.data)
 		self.assertIn("days", me_response.data["knowledge_momentum"])
 
+	def test_profile_includes_completed_module_lesson_quiz_totals(self):
+		user_model = get_user_model()
+		user = user_model.objects.create_user(
+			username='aggregate_user',
+			email='aggregate_user@example.com',
+			password='StrongPass123',
+		)
+
+		category = Category.objects.create(name='Agg Cat', description='Aggregate category')
+		module = Module.objects.create(
+			category=category,
+			title='Aggregate Module',
+			description='Aggregate module',
+		)
+		lesson = Lesson.objects.create(
+			title='Aggregate Lesson',
+			content='Aggregate content',
+			category=category,
+			module=module,
+			video_url='https://example.com/video.mp4',
+			order=1,
+		)
+		quiz = Quiz.objects.create(title='Aggregate Quiz', lesson=lesson)
+
+		UserProgress.objects.create(user=user, module=module, completed=True, completed_parts=1, total_parts=1)
+		UserProgress.objects.create(user=user, lesson=lesson, completed=True, completed_parts=1, total_parts=1)
+		QuizSubmission.objects.create(user=user, quiz=quiz, is_submitted=True, total_questions=1, correct_answers=1, score=100)
+
+		login_response = self.client.post(
+			reverse('login'),
+			{'username': 'aggregate_user', 'password': 'StrongPass123'},
+			format='json',
+		)
+		self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+		self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}")
+		me_response = self.client.get(reverse('profile'), format='json')
+
+		self.assertEqual(me_response.status_code, status.HTTP_200_OK)
+		self.assertEqual(me_response.data['total_modules_completed'], 1)
+		self.assertEqual(me_response.data['total_lessons_completed'], 1)
+		self.assertEqual(me_response.data['total_quizzes_completed'], 1)
+
 	def test_non_admin_cannot_list_users(self):
 		user_model = get_user_model()
 		user_model.objects.create_user(
@@ -190,6 +238,70 @@ class AuthApiTests(APITestCase):
 		target_user.refresh_from_db()
 		self.assertEqual(target_user.role, "admin")
 		self.assertTrue(target_user.is_staff)
+
+	def test_admin_user_list_includes_completed_aggregate_totals(self):
+		user_model = get_user_model()
+		admin_user = user_model.objects.create_user(
+			username='aggregate_admin',
+			email='aggregate_admin@example.com',
+			password=TEST_ADMIN_PASSWORD,
+			role='admin',
+		)
+		target_user = user_model.objects.create_user(
+			username='aggregate_target',
+			email='aggregate_target@example.com',
+			password='StrongPass123',
+		)
+
+		category = Category.objects.create(name='Admin Agg Cat', description='Admin aggregate category')
+		module = Module.objects.create(
+			category=category,
+			title='Admin Aggregate Module',
+			description='Admin aggregate module',
+		)
+		lesson = Lesson.objects.create(
+			title='Admin Aggregate Lesson',
+			content='Admin aggregate content',
+			category=category,
+			module=module,
+			video_url='https://example.com/admin-video.mp4',
+			order=1,
+		)
+		quiz = Quiz.objects.create(title='Admin Aggregate Quiz', lesson=lesson)
+
+		UserProgress.objects.create(user=target_user, module=module, completed=True, completed_parts=1, total_parts=1)
+		UserProgress.objects.create(user=target_user, lesson=lesson, completed=True, completed_parts=1, total_parts=1)
+		QuizSubmission.objects.create(
+			user=target_user,
+			quiz=quiz,
+			is_submitted=True,
+			total_questions=1,
+			correct_answers=1,
+			score=100,
+		)
+
+		login_response = self.client.post(
+			reverse('login'),
+			{'username': admin_user.username, 'password': TEST_ADMIN_PASSWORD},
+			format='json',
+		)
+		self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+		self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}")
+		list_response = self.client.get(reverse('user_list'), format='json')
+		self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+		target_payload = next(item for item in list_response.data if item['username'] == 'aggregate_target')
+		self.assertEqual(target_payload['total_modules_completed'], 1)
+		self.assertEqual(target_payload['total_lessons_completed'], 1)
+		self.assertEqual(target_payload['total_quizzes_completed'], 1)
+
+		detail_response = self.client.get(reverse('user_detail', kwargs={'pk': target_user.id}), format='json')
+		self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+		self.assertEqual(detail_response.data['id'], target_user.id)
+		self.assertEqual(detail_response.data['total_modules_completed'], 1)
+		self.assertEqual(detail_response.data['total_lessons_completed'], 1)
+		self.assertEqual(detail_response.data['total_quizzes_completed'], 1)
 
 	def test_learner_cannot_self_promote_from_profile_endpoint(self):
 		user_model = get_user_model()

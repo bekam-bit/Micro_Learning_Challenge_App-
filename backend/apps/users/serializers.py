@@ -73,10 +73,24 @@ class RegisterSerializer(serializers.ModelSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(required=False)
     knowledge_momentum = serializers.SerializerMethodField(read_only=True)
+    total_modules_completed = serializers.IntegerField(read_only=True)
+    total_lessons_completed = serializers.IntegerField(read_only=True)
+    total_quizzes_completed = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "role", "date_joined", "profile", "knowledge_momentum"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "role",
+            "date_joined",
+            "profile",
+            "knowledge_momentum",
+            "total_modules_completed",
+            "total_lessons_completed",
+            "total_quizzes_completed",
+        ]
         read_only_fields = ["id", "role", "date_joined"]
 
     def get_knowledge_momentum(self, instance):
@@ -174,9 +188,23 @@ class LoginSerializer(TokenObtainPairSerializer):
 
 
 class UserListSerializer(serializers.ModelSerializer):
+    total_modules_completed = serializers.IntegerField(read_only=True)
+    total_lessons_completed = serializers.IntegerField(read_only=True)
+    total_quizzes_completed = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "username", "email", "role", "is_active", "date_joined"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "role",
+            "is_active",
+            "date_joined",
+            "total_modules_completed",
+            "total_lessons_completed",
+            "total_quizzes_completed",
+        ]
         read_only_fields = fields
 
 

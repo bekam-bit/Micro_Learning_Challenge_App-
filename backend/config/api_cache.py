@@ -31,21 +31,24 @@ def _get_namespace_version(namespace: str) -> int:
     return int(version)
 
 
-def _build_payload_key(request, namespace: str) -> str:
+def _build_payload_key(request, namespace: str, *, identity: str | None = None) -> str:
     version = _get_namespace_version(namespace)
-    fingerprint = sha256(request.get_full_path().encode("utf-8")).hexdigest()
+    payload = request.get_full_path() if identity is None else f"{identity}|{request.get_full_path()}"
+    fingerprint = sha256(payload.encode("utf-8")).hexdigest()
     return f"{_PAYLOAD_PREFIX}{namespace}:v{version}:{fingerprint}"
 
 
-def get_cached_response(request, namespace: str):
+def get_cached_response(request, namespace: str, *, allow_authenticated: bool = False, identity: str | None = None):
     if not _cache_enabled():
         return None
 
     user = getattr(request, "user", None)
-    if request.method != "GET" or (user and user.is_authenticated):
+    if request.method != "GET":
+        return None
+    if not allow_authenticated and (user and user.is_authenticated):
         return None
 
-    key = _build_payload_key(request, namespace)
+    key = _build_payload_key(request, namespace, identity=identity)
     cached = cache.get(key)
     if cached is None:
         return None
@@ -53,17 +56,27 @@ def get_cached_response(request, namespace: str):
     return Response(cached["data"], status=cached["status"])
 
 
-def set_cached_response(request, namespace: str, response: Response, timeout: int = CACHE_TTL_SECONDS):
+def set_cached_response(
+    request,
+    namespace: str,
+    response: Response,
+    timeout: int = CACHE_TTL_SECONDS,
+    *,
+    allow_authenticated: bool = False,
+    identity: str | None = None,
+):
     if not _cache_enabled():
         return
 
     user = getattr(request, "user", None)
-    if request.method != "GET" or (user and user.is_authenticated):
+    if request.method != "GET":
+        return
+    if not allow_authenticated and (user and user.is_authenticated):
         return
     if response.status_code != 200:
         return
 
-    key = _build_payload_key(request, namespace)
+    key = _build_payload_key(request, namespace, identity=identity)
     cache.set(
         key,
         {

@@ -139,17 +139,17 @@ class UserProgress(models.Model):
             completed=True,
         ).count()
 
-        direct_module_challenges_total = module.challenges.filter(lesson__isnull=True).count()
-        direct_module_challenges_completed = cls.objects.filter(
+        from apps.quiz.models import Quiz, QuizSubmission
+
+        total_quizzes = Quiz.objects.filter(lesson__module=module).count()
+        completed_quizzes = QuizSubmission.objects.filter(
             user=user,
-            challenge__module=module,
-            challenge__lesson__isnull=True,
-            challenge__isnull=False,
-            completed=True,
+            quiz__lesson__module=module,
+            is_submitted=True,
         ).count()
 
-        total_parts = total_lessons + direct_module_challenges_total
-        completed_parts = completed_lessons + direct_module_challenges_completed
+        total_parts = total_lessons + total_quizzes
+        completed_parts = completed_lessons + completed_quizzes
         completed_parts = min(completed_parts, total_parts) if total_parts > 0 else 0
         progress_percent = cls._calculate_percent(completed_parts, total_parts)
         completed = total_parts > 0 and completed_parts >= total_parts

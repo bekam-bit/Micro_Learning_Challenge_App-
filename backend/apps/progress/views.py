@@ -1,5 +1,9 @@
+import logging
+from time import perf_counter
 from datetime import datetime, time
 
+from django.conf import settings
+from django.db import connection
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
@@ -9,10 +13,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from config.pagination import StandardPageNumberPagination
+from config.api_cache import get_cached_response, set_cached_response
 
 from .models import UserProgress
 from .serializers import AdminUserProgressSerializer, UserProgressSerializer
 from apps.users.permissions import IsAdminRole
+
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_datetime_bound(value: str, *, is_end: bool):
@@ -75,6 +83,45 @@ def _build_progress_summary(queryset):
 	}
 
 
+def _run_with_query_profile(endpoint_name: str, callback):
+	if not getattr(settings, 'API_QUERY_PROFILE_ENABLED', False):
+		return callback()
+
+	threshold_queries = int(getattr(settings, 'API_QUERY_PROFILE_QUERY_THRESHOLD', 15))
+	threshold_ms = float(getattr(settings, 'API_QUERY_PROFILE_MS_THRESHOLD', 120))
+
+	force_debug_before = connection.force_debug_cursor
+	if not force_debug_before:
+		connection.force_debug_cursor = True
+
+	queries_before = len(connection.queries)
+	start = perf_counter()
+	try:
+		result = callback()
+	finally:
+		elapsed_ms = (perf_counter() - start) * 1000
+		query_count = max(0, len(connection.queries) - queries_before)
+		if (query_count >= threshold_queries) or (elapsed_ms >= threshold_ms):
+			logger.warning(
+				'API query profile threshold exceeded for %s: queries=%s elapsed_ms=%.2f',
+				endpoint_name,
+				query_count,
+				elapsed_ms,
+			)
+		if not force_debug_before:
+			connection.force_debug_cursor = False
+
+	return result
+
+
+def _summary_cache_enabled():
+	return bool(getattr(settings, 'SUMMARY_ENDPOINT_CACHE_ENABLED', False))
+
+
+def _summary_cache_ttl():
+	return int(getattr(settings, 'SUMMARY_ENDPOINT_CACHE_TTL_SECONDS', 60))
+
+
 class UserProgressListView(generics.ListAPIView):
 	serializer_class = UserProgressSerializer
 	permission_classes = [permissions.IsAuthenticated]
@@ -102,8 +149,30 @@ class UserProgressSummaryView(APIView):
 	permission_classes = [permissions.IsAuthenticated]
 
 	def get(self, request):
+		cache_identity = f'user:{request.user.pk}'
+		if _summary_cache_enabled():
+			cached = get_cached_response(
+				request,
+				'progress_user_summary',
+				allow_authenticated=True,
+				identity=cache_identity,
+			)
+			if cached is not None:
+				return cached
+
 		queryset = UserProgress.objects.filter(user=request.user)
-		return Response(_build_progress_summary(queryset))
+		payload = _run_with_query_profile('user_progress_summary', lambda: _build_progress_summary(queryset))
+		response = Response(payload)
+		if _summary_cache_enabled():
+			set_cached_response(
+				request,
+				'progress_user_summary',
+				response,
+				timeout=_summary_cache_ttl(),
+				allow_authenticated=True,
+				identity=cache_identity,
+			)
+		return response
 
 
 class AdminUserProgressListView(generics.ListAPIView):
@@ -151,13 +220,46 @@ class AdminUserProgressListView(generics.ListAPIView):
 			completed_bool = completed.lower() in {'1', 'true', 'yes'}
 			queryset = queryset.filter(completed=completed_bool)
 
-		return queryset.select_related('user', 'challenge', 'lesson', 'module').order_by('id')
+		return queryset.select_related('user', 'challenge', 'lesson', 'module').only(
+			'id',
+			'user_id',
+			'challenge_id',
+			'lesson_id',
+			'module_id',
+			'completed',
+			'points_earned',
+			'completed_parts',
+			'total_parts',
+			'progress_percent',
+			'created_at',
+			'updated_at',
+			'user__id',
+			'user__username',
+			'user__email',
+			'challenge__id',
+			'challenge__title',
+			'lesson__id',
+			'lesson__title',
+			'module__id',
+			'module__title',
+		).order_by('id')
 
 
 class AdminUserProgressSummaryView(APIView):
 	permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
 	def get(self, request):
+		cache_identity = f'admin:{request.user.pk}'
+		if _summary_cache_enabled():
+			cached = get_cached_response(
+				request,
+				'progress_admin_summary',
+				allow_authenticated=True,
+				identity=cache_identity,
+			)
+			if cached is not None:
+				return cached
+
 		queryset = UserProgress.objects.all()
 		queryset = _apply_updated_at_range(queryset, request.query_params)
 
@@ -173,6 +275,16 @@ class AdminUserProgressSummaryView(APIView):
 		elif owner_type == 'module':
 			queryset = queryset.filter(module__isnull=False)
 
-		payload = _build_progress_summary(queryset)
+		payload = _run_with_query_profile('admin_user_progress_summary', lambda: _build_progress_summary(queryset))
 		payload['users_tracked'] = queryset.values('user_id').distinct().count()
-		return Response(payload)
+		response = Response(payload)
+		if _summary_cache_enabled():
+			set_cached_response(
+				request,
+				'progress_admin_summary',
+				response,
+				timeout=_summary_cache_ttl(),
+				allow_authenticated=True,
+				identity=cache_identity,
+			)
+		return response

@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 from apps.categories.models import Category
 from apps.modules.models import Module
 from apps.lessons.models import Lesson
+from apps.challenges.models import Challenge, ChallengeQuestion
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -48,6 +49,42 @@ class LessonAPITestCase(APITestCase):
 		response = self.client.get(self.detail_url)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(response.data['id'], self.lesson.id)
+
+	def test_lesson_detail_can_include_knowledge_check(self):
+		challenge = Challenge.objects.create(
+			title='Lesson Knowledge Check',
+			description='Check understanding',
+			difficulty='easy',
+			points=10,
+			time_limit_minutes=15,
+			lesson=self.lesson,
+		)
+		ChallengeQuestion.objects.create(
+			challenge=challenge,
+			question_text='What is superposition?',
+			question_type='single_choice',
+			options=['A', 'B', 'C'],
+			correct_answer='B',
+			max_score=1,
+			order=1,
+		)
+
+		self.client.force_authenticate(user=self.user)
+		response = self.client.get(f'{self.detail_url}?include=knowledge_check')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertIn('knowledge_check', response.data)
+		self.assertIsNotNone(response.data['knowledge_check'])
+		self.assertEqual(response.data['knowledge_check']['challenge_id'], challenge.id)
+		self.assertEqual(
+			response.data['knowledge_check']['question']['question_text'],
+			'What is superposition?',
+		)
+
+	def test_lesson_detail_knowledge_check_returns_none_when_not_available(self):
+		self.client.force_authenticate(user=self.user)
+		response = self.client.get(f'{self.detail_url}?include=knowledge_check')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertIsNone(response.data['knowledge_check'])
 
 	def test_lesson_create_requires_auth(self):
 		data = {

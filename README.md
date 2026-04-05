@@ -8,6 +8,7 @@ Base route prefixes:
 - `/api/modules/`
 - `/api/lessons/`
 - `/api/challenges/`
+- `/api/quiz/`
 - `/api/progress/`
 - `/api/points/`
 
@@ -32,6 +33,7 @@ Pagination:
 | `/api/auth/token/refresh/` | `POST` | No | Any | Exchange refresh token for a new access token. |
 | `/api/auth/logout/` | `POST` | Yes | Authenticated | Blacklist refresh token. |
 | `/api/auth/users/` | `GET` | Yes | Admin | List users for admin panel. |
+| `/api/auth/users/<id>/` | `GET` | Yes | Admin | Retrieve one user for admin panel. |
 | `/api/auth/users/<id>/role/` | `PATCH` | Yes | Admin | Update user role (`admin` or `learner`). |
 
 ### Request Fields
@@ -68,6 +70,7 @@ Logout response fields:
 
 User list item fields:
 - `id`, `username`, `email`, `role`, `is_active`, `date_joined`
+- `total_modules_completed`, `total_lessons_completed`, `total_quizzes_completed`
 
 ### Sample
 
@@ -128,6 +131,7 @@ Top-level fields:
 - `id`, `username`, `email`, `role`, `date_joined`
 - `profile`
 - `knowledge_momentum`
+- `total_modules_completed`, `total_lessons_completed`, `total_quizzes_completed`
 
 `profile` fields:
 - `bio`
@@ -188,9 +192,16 @@ Response:
 			{"date": "2026-04-04", "score": 30, "level": 2},
 			{"date": "2026-04-05", "score": 40, "level": 2}
 		]
-	}
+	},
+	"total_modules_completed": 2,
+	"total_lessons_completed": 8,
+	"total_quizzes_completed": 5
 }
 ```
+
+Admin user detail response (`GET /api/auth/users/<id>/`) uses the same shape as user list items, including:
+- `id`, `username`, `email`, `role`, `is_active`, `date_joined`
+- `total_modules_completed`, `total_lessons_completed`, `total_quizzes_completed`
 
 ## 3. Categories
 
@@ -575,6 +586,10 @@ Response:
 `GET /api/progress/admin/summary/`
 - `user_id`, `owner_type`, `from`, `to`
 
+Cache and freshness behavior (when enabled):
+- Summary endpoints can be cached for short TTL in production.
+- Cache namespaces are invalidated on progress create/update/delete, so summary reads stay fresh.
+
 ### Response Fields
 
 Learner progress item fields:
@@ -630,6 +645,39 @@ Response:
 	]
 }
 ```
+
+## Production Optimization Notes
+
+### DB Indexes
+
+Added for quiz submission filtering/access patterns:
+- `quiz_submission(user, is_submitted)`
+- `quiz_submission(quiz, is_submitted)`
+- `quiz_submission(submitted_at)`
+
+Migration:
+- `apps/quiz/migrations/0006_quizsubmission_indexes.py`
+
+### Summary Endpoint Caching
+
+Settings:
+- `SUMMARY_ENDPOINT_CACHE_ENABLED`
+- `SUMMARY_ENDPOINT_CACHE_TTL_SECONDS`
+- `API_RESPONSE_CACHE_ENABLED`
+
+Cached endpoints:
+- `GET /api/progress/summary/`
+- `GET /api/progress/admin/summary/`
+
+### Query Profiling Thresholds
+
+Settings:
+- `API_QUERY_PROFILE_ENABLED`
+- `API_QUERY_PROFILE_QUERY_THRESHOLD`
+- `API_QUERY_PROFILE_MS_THRESHOLD`
+
+Behavior:
+- Logs warnings when request query count or elapsed time crosses thresholds.
 
 ## 8. Points
 

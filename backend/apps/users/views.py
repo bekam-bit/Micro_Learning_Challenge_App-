@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Count, IntegerField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.exceptions import ValidationError
@@ -16,8 +18,57 @@ from .serializers import (
 	UserRoleUpdateSerializer,
 )
 from .throttles import AdminActionRateThrottle, LoginRateThrottle
+from apps.progress.models import UserProgress
+from apps.quiz.models import QuizSubmission
 
 User = get_user_model()
+
+
+def _with_completion_totals(queryset):
+	modules_completed_subquery = (
+		UserProgress.objects.filter(
+			user_id=OuterRef('pk'),
+			module__isnull=False,
+			completed=True,
+		)
+		.values('user_id')
+		.annotate(total=Count('id'))
+		.values('total')[:1]
+	)
+	lessons_completed_subquery = (
+		UserProgress.objects.filter(
+			user_id=OuterRef('pk'),
+			lesson__isnull=False,
+			completed=True,
+		)
+		.values('user_id')
+		.annotate(total=Count('id'))
+		.values('total')[:1]
+	)
+	quizzes_completed_subquery = (
+		QuizSubmission.objects.filter(
+			user_id=OuterRef('pk'),
+			is_submitted=True,
+		)
+		.values('user_id')
+		.annotate(total=Count('id'))
+		.values('total')[:1]
+	)
+
+	return queryset.annotate(
+		total_modules_completed=Coalesce(
+			Subquery(modules_completed_subquery, output_field=IntegerField()),
+			Value(0),
+		),
+		total_lessons_completed=Coalesce(
+			Subquery(lessons_completed_subquery, output_field=IntegerField()),
+			Value(0),
+		),
+		total_quizzes_completed=Coalesce(
+			Subquery(quizzes_completed_subquery, output_field=IntegerField()),
+			Value(0),
+		),
+	)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -31,7 +82,8 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 	parser_classes = [JSONParser, MultiPartParser, FormParser]
 
 	def get_object(self):
-		return User.objects.select_related('profile').get(pk=self.request.user.pk)
+		queryset = _with_completion_totals(User.objects.select_related('profile'))
+		return queryset.get(pk=self.request.user.pk)
 
 
 class LoginView(TokenObtainPairView):
@@ -50,10 +102,23 @@ class LogoutView(APIView):
 
 
 class UserListView(generics.ListAPIView):
-	queryset = User.objects.only('id', 'username', 'email', 'role', 'is_active', 'date_joined').order_by("id")
+	queryset = _with_completion_totals(
+		User.objects.only('id', 'username', 'email', 'role', 'is_active', 'date_joined').order_by("id")
+	)
 	serializer_class = UserListSerializer
 	permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 	throttle_classes = [AdminActionRateThrottle]
+
+
+class UserDetailView(generics.RetrieveAPIView):
+	serializer_class = UserListSerializer
+	permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+	throttle_classes = [AdminActionRateThrottle]
+
+	def get_queryset(self):
+		return _with_completion_totals(
+			User.objects.only('id', 'username', 'email', 'role', 'is_active', 'date_joined')
+		)
 
 
 class UserRoleUpdateView(generics.UpdateAPIView):

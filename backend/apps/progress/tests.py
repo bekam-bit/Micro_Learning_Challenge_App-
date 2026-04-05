@@ -1,6 +1,8 @@
 from datetime import timedelta
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
@@ -98,7 +100,7 @@ class UserProgressRollupTests(TestCase):
 		self.assertEqual(challenge_progress.total_parts, 1)
 		self.assertEqual(challenge_progress.progress_percent, 100)
 
-	def test_module_progress_tracks_direct_module_challenges(self):
+	def test_module_progress_excludes_direct_module_challenges(self):
 		module = Module.objects.create(
 			category=self.category,
 			title='Module B',
@@ -117,9 +119,9 @@ class UserProgressRollupTests(TestCase):
 		)
 
 		module_progress = UserProgress.objects.get(user=self.user, module=module)
-		self.assertEqual(module_progress.completed_parts, 1)
-		self.assertEqual(module_progress.total_parts, 2)
-		self.assertEqual(module_progress.progress_percent, 50)
+		self.assertEqual(module_progress.completed_parts, 0)
+		self.assertEqual(module_progress.total_parts, 0)
+		self.assertEqual(module_progress.progress_percent, 0)
 		self.assertFalse(module_progress.completed)
 
 	def test_profile_aggregates_sync_from_user_progress(self):
@@ -200,6 +202,32 @@ class UserProgressRollupTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.data), 1)
 		self.assertEqual(response.data[0]['owner_type'], 'lesson')
+
+	def test_progress_summary_query_count_budget(self):
+		module = Module.objects.create(
+			category=self.category,
+			title='Perf Module',
+			description='Perf Module description',
+		)
+		lesson = Lesson.objects.create(
+			title='Perf Lesson',
+			content='Perf content',
+			category=self.category,
+			module=module,
+			order=1,
+		)
+		self._create_challenge_with_attempt(
+			title='Perf Challenge',
+			lesson=lesson,
+			submitted=True,
+		)
+
+		with CaptureQueriesContext(connection) as ctx:
+			response = self.client.get(reverse('user_progress_summary'))
+
+		self.assertEqual(response.status_code, 200)
+		# Budget guardrail: summary endpoint should stay low-query.
+		self.assertLessEqual(len(ctx), 5)
 
 
 class AdminUserProgressApiTests(TestCase):
@@ -429,3 +457,31 @@ class AdminUserProgressApiTests(TestCase):
 		self.assertEqual(response.data['users_tracked'], 1)
 		self.assertEqual(response.data['challenges']['total'], 1)
 		self.assertEqual(response.data['points_earned'], 20)
+
+	def test_admin_summary_query_count_budget(self):
+		lesson = Lesson.objects.create(
+			title='Perf Admin Lesson',
+			content='Perf admin content',
+			category=Category.objects.create(name='Perf Admin Cat', description='Perf admin cat desc'),
+		)
+		UserProgress.objects.create(
+			user=self.learner_one,
+			challenge=Challenge.objects.create(
+				title='Perf Admin Challenge',
+				description='Perf',
+				difficulty='easy',
+				lesson=lesson,
+			),
+			completed=True,
+			points_earned=10,
+			completed_parts=1,
+			total_parts=1,
+		)
+
+		self.client.force_authenticate(user=self.admin_user)
+		with CaptureQueriesContext(connection) as ctx:
+			response = self.client.get(reverse('admin_user_progress_summary'))
+
+		self.assertEqual(response.status_code, 200)
+		# Budget guardrail: aggregate + users tracked should remain compact.
+		self.assertLessEqual(len(ctx), 6)
