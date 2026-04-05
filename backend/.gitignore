@@ -1,7 +1,14 @@
-# Environment files
+# Environment files and secrets
 .env
 .env.*
-!.env.example
+!.env.local
+
+
+# Local databases and runtime-generated files
+*.sqlite3
+media/
+staticfiles/
+*.log
 
 # Python cache and build artifacts
 __pycache__/
@@ -11,3 +18,13 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/

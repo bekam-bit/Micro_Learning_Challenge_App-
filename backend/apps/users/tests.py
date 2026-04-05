@@ -1,8 +1,12 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from datetime import timedelta
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -357,6 +361,97 @@ class AuthApiTests(APITestCase):
 		self.assertEqual(update_response.status_code, status.HTTP_400_BAD_REQUEST)
 		admin_user.refresh_from_db()
 		self.assertEqual(admin_user.role, "admin")
+
+	@patch("apps.users.views.send_password_reset_email")
+	def test_forgot_password_triggers_email_for_existing_user(self, send_reset_email_mock):
+		user_model = get_user_model()
+		user = user_model.objects.create_user(
+			username="forgot_user",
+			email="forgot_user@example.com",
+			password="StrongPass123",
+		)
+
+		response = self.client.post(
+			reverse("forgot_password"),
+			{"email": user.email},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		send_reset_email_mock.assert_called_once_with(user)
+
+	@patch("apps.users.views.send_password_reset_email")
+	def test_forgot_password_does_not_disclose_unknown_email(self, send_reset_email_mock):
+		response = self.client.post(
+			reverse("forgot_password"),
+			{"email": "unknown@example.com"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		send_reset_email_mock.assert_not_called()
+
+	def test_reset_password_confirm_updates_credentials(self):
+		user_model = get_user_model()
+		user = user_model.objects.create_user(
+			username="reset_user",
+			email="reset_user@example.com",
+			password="OldStrongPass123",
+		)
+
+		uid = urlsafe_base64_encode(force_bytes(user.pk))
+		token = default_token_generator.make_token(user)
+		new_password = "NewStrongPass456"
+
+		response = self.client.post(
+			reverse("reset_password_confirm"),
+			{
+				"uid": uid,
+				"token": token,
+				"new_password": new_password,
+				"confirm_password": new_password,
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+		login_with_old_password = self.client.post(
+			reverse("login"),
+			{"username": user.username, "password": "OldStrongPass123"},
+			format="json",
+		)
+		self.assertEqual(login_with_old_password.status_code, status.HTTP_401_UNAUTHORIZED)
+
+		login_with_new_password = self.client.post(
+			reverse("login"),
+			{"username": user.username, "password": new_password},
+			format="json",
+		)
+		self.assertEqual(login_with_new_password.status_code, status.HTTP_200_OK)
+
+	def test_reset_password_confirm_rejects_invalid_token(self):
+		user_model = get_user_model()
+		user = user_model.objects.create_user(
+			username="invalid_token_user",
+			email="invalid_token_user@example.com",
+			password="OldStrongPass123",
+		)
+
+		uid = urlsafe_base64_encode(force_bytes(user.pk))
+
+		response = self.client.post(
+			reverse("reset_password_confirm"),
+			{
+				"uid": uid,
+				"token": "invalid-token",
+				"new_password": "NewStrongPass456",
+				"confirm_password": "NewStrongPass456",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class UserStreakServiceTests(TestCase):

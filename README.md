@@ -33,6 +33,8 @@ Pagination:
 | `/api/auth/token/` | `POST` | No | Any | Alias of login endpoint (same serializer as login). |
 | `/api/auth/token/refresh/` | `POST` | No | Any | Exchange refresh token for a new access token. |
 | `/api/auth/logout/` | `POST` | Yes | Authenticated | Blacklist refresh token. |
+| `/api/auth/password/forgot/` | `POST` | No | Any | Request password reset link by email. Always returns a generic response. |
+| `/api/auth/password/reset/confirm/` | `POST` | No | Any | Complete password reset with `uid`, `token`, and new password. |
 | `/api/auth/users/` | `GET` | Yes | Admin | List users for admin panel. |
 | `/api/auth/users/<id>/` | `GET` | Yes | Admin | Retrieve one user for admin panel. |
 | `/api/auth/users/<id>/role/` | `PATCH` | Yes | Admin | Update user role (`admin` or `learner`). |
@@ -54,6 +56,15 @@ Pagination:
 `POST /api/auth/logout/`
 - `refresh` string required
 
+`POST /api/auth/password/forgot/`
+- `email` email required
+
+`POST /api/auth/password/reset/confirm/`
+- `uid` string required
+- `token` string required
+- `new_password` string required, min length 8
+- `confirm_password` string required, must match `new_password`
+
 `PATCH /api/auth/users/<id>/role/`
 - `role` enum required: `admin` or `learner`
 
@@ -67,6 +78,12 @@ Login/token response fields:
 - `user`: `id`, `username`, `email`, `role`
 
 Logout response fields:
+- `detail`
+
+Forgot password response fields:
+- `detail`
+
+Reset password confirm response fields:
 - `detail`
 
 User list item fields:
@@ -101,6 +118,113 @@ Response:
 	}
 }
 ```
+
+### Password Reset API Contract
+
+This contract defines the complete reset-password flow for frontend integration.
+
+#### 1. Request Reset Link
+
+Endpoint:
+- `POST /api/auth/password/forgot/`
+
+Request body:
+```json
+{
+	"email": "user@example.com"
+}
+```
+
+Success response (`200 OK`):
+```json
+{
+	"detail": "If an account with this email exists, a reset link has been sent"
+}
+```
+
+Notes:
+- Response is intentionally generic to prevent account enumeration.
+- If the account exists, backend sends email with reset link containing `uid` and `token` query params.
+
+#### 2. User Opens Reset Link
+
+Generated link format:
+- `<PASSWORD_RESET_FRONTEND_URL>?uid=<uid>&token=<token>`
+
+Frontend responsibilities:
+- Read `uid` and `token` from query params.
+- Show reset form with `new_password` and `confirm_password`.
+
+#### 3. Confirm New Password
+
+Endpoint:
+- `POST /api/auth/password/reset/confirm/`
+
+Request body:
+```json
+{
+	"uid": "<uid-from-link>",
+	"token": "<token-from-link>",
+	"new_password": "NewStrongPass123!",
+	"confirm_password": "NewStrongPass123!"
+}
+```
+
+Success response (`200 OK`):
+```json
+{
+	"detail": "Password reset successful"
+}
+```
+
+Validation/error responses (`400 Bad Request`):
+- Password mismatch:
+```json
+{
+	"confirm_password": ["Passwords do not match"]
+}
+```
+- Invalid/expired token:
+```json
+{
+	"token": ["Invalid or expired password reset token"]
+}
+```
+- Password policy failure:
+```json
+{
+	"new_password": ["<django password validation message>"]
+}
+```
+
+#### 4. Post-Reset Login Behavior
+
+- Old password is invalid.
+- New password can be used immediately for `POST /api/auth/login/`.
+
+Password reset email configuration (environment variables):
+- `EMAIL_PROVIDER`: `smtp` (default), `resend`, or `sendgrid`
+- `DEFAULT_FROM_EMAIL`: sender address
+- `PASSWORD_RESET_FRONTEND_URL`: frontend reset route, example `https://app.example.com/reset-password`
+- `BACKEND_BASE_URL`: optional fallback base URL when frontend URL is not set
+- `PASSWORD_RESET_CONFIRM_PATH`: optional fallback path, default `/api/auth/password/reset/confirm/`
+- `RESEND_API_KEY`: required when `EMAIL_PROVIDER=resend`
+- `SENDGRID_API_KEY`: required when `EMAIL_PROVIDER=sendgrid`
+
+SMTP fallback variables (`EMAIL_PROVIDER=smtp`):
+- `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `EMAIL_USE_SSL`
+
+Deployment template:
+- Use `backend/.env.example` as the production starter template and fill in real values.
+
+Environment profiles:
+- Local development template: `backend/.env.local.example`
+- Production template: `backend/.env.production.example`
+
+How to use:
+- For local development, copy `backend/.env.local.example` to `backend/.env` and fill in local values.
+- For deployment, copy `backend/.env.production.example` to server environment variables (or `backend/.env` on server) and fill in production values.
+- Never commit real secrets (especially `RESEND_API_KEY`) to version control.
 
 ## 2. Profile and Streak
 
