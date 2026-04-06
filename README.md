@@ -15,7 +15,7 @@ Base route prefixes:
 
 Backend live Demo:
 ...
-https://learning-challenge.onrender.com
+https://learning-challenge.onrender.com/
 ...
 
 Authentication:
