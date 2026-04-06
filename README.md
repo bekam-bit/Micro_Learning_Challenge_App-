@@ -13,6 +13,11 @@ Base route prefixes:
 - `/api/progress/`
 - `/api/points/`
 
+Backend live Demo:
+...
+https://learning-challenge.onrender.com
+...
+
 Authentication:
 - JWT Bearer token for protected endpoints.
 - Header format: `Authorization: Bearer <access_token>`
