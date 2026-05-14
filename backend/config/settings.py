@@ -15,6 +15,7 @@ import os
 import sys
 from datetime import timedelta
 from urllib.parse import parse_qsl, urlparse
+from django.core.exceptions import ImproperlyConfigured
 
 
 def _env_bool(name, default=False):
@@ -149,22 +150,25 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Database configuration from DATABASE_URL environment variable
 database_url = os.getenv('DATABASE_URL')
 
-if database_url:
-    parsed_database_url = urlparse(database_url)
+if not database_url:
+    raise ImproperlyConfigured("DATABASE_URL environment variable is required")
 
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': parsed_database_url.path.lstrip('/'),
-            'USER': parsed_database_url.username,
-            'PASSWORD': parsed_database_url.password,
-            'HOST': parsed_database_url.hostname,
-            'PORT': parsed_database_url.port or 5432,
-            'OPTIONS': dict(parse_qsl(parsed_database_url.query)),
-        }
+parsed_database_url = urlparse(database_url)
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': parsed_database_url.path.lstrip('/'),
+        'USER': parsed_database_url.username,
+        'PASSWORD': parsed_database_url.password,
+        'HOST': parsed_database_url.hostname,
+        'PORT': parsed_database_url.port or 5432,
+        'OPTIONS': dict(parse_qsl(parsed_database_url.query)),
     }
+}
 
 
 
