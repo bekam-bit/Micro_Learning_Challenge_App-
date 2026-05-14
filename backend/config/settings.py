@@ -229,6 +229,7 @@ REST_FRAMEWORK = {
         'notification_action': '60/minute',
         'password_reset': '30/hour',
     },
+    'TRAILING_SLASH': False,
 }
 
 SIMPLE_JWT = {
@@ -246,5 +247,8 @@ SUMMARY_ENDPOINT_CACHE_TTL_SECONDS = int(os.getenv('SUMMARY_ENDPOINT_CACHE_TTL_S
 API_QUERY_PROFILE_ENABLED = os.getenv('API_QUERY_PROFILE_ENABLED', 'False').lower() in ('1', 'true', 'yes', 'on')
 API_QUERY_PROFILE_QUERY_THRESHOLD = int(os.getenv('API_QUERY_PROFILE_QUERY_THRESHOLD', '15'))
 API_QUERY_PROFILE_MS_THRESHOLD = float(os.getenv('API_QUERY_PROFILE_MS_THRESHOLD', '120'))
+
+# Disable URL trailing slash handling for API endpoints
+APPEND_SLASH = False
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
