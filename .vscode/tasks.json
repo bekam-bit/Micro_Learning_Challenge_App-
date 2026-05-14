@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run backend tests once",
+			"type": "shell",
+			"command": "cd backend ; \"d:/gdg capstone micro learning challenge app(backend)/Micro_Learning_Challenge_App-/.venv/Scripts/python.exe\" -m pytest -x -vv",
+			"isBackground": false
+		}
+	]
+}
