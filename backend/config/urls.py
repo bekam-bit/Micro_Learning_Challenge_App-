@@ -21,11 +21,11 @@ from django.http import JsonResponse
 from django.urls import include, path
 
 
-# def api_root(_request):
-#     return JsonResponse({'message': 'Micro Learning Challenge API is running'})
+def api_root(_request):
+    return JsonResponse({'message': 'Micro Learning Challenge API is running', 'status': 'healthy'})
 
 urlpatterns = [
-    # path('', api_root, name='api-root'),
+    path('', api_root, name='api-root'),
     path('admin/', admin.site.urls),
     path('api/auth/', include('apps.users.urls')),
     path('api/categories/', include('apps.categories.urls')),
