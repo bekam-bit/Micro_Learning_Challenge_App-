@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure we run from backend folder
-cd backend
+# Script placed inside backend/ so Render can run it as 'bash backend/render-start.sh'
 
 # Default WEB_CONCURRENCY if not set by the environment (Render sets it sometimes)
 : "${WEB_CONCURRENCY:=1}"
