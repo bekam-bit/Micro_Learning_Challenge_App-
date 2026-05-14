@@ -23,7 +23,7 @@ until python manage.py migrate; do
 done
 
 # Collect static files
-python manage.py collectstatic
+python manage.py collectstatic --noinput
 
 # Create superuser non-interactively if env vars are provided
 if [ -n "${DJANGO_SUPERUSER_USERNAME:-}" ] && [ -n "${DJANGO_SUPERUSER_PASSWORD:-}" ]; then
