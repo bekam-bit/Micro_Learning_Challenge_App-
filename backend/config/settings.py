@@ -158,17 +158,30 @@ if not database_url:
 
 parsed_database_url = urlparse(database_url)
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': parsed_database_url.path.lstrip('/'),
-        'USER': parsed_database_url.username,
-        'PASSWORD': parsed_database_url.password,
-        'HOST': parsed_database_url.hostname,
-        'PORT': parsed_database_url.port or 5432,
-        'OPTIONS': dict(parse_qsl(parsed_database_url.query)),
+if parsed_database_url:
+    # Production: Neon PostgreSQL
+    import dj_database_url
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': parsed_database_url.path.lstrip('/'),
+            'USER': parsed_database_url.username,
+            'PASSWORD': parsed_database_url.password,
+            'HOST': parsed_database_url.hostname,
+            'PORT': parsed_database_url.port or 5432,
+            'OPTIONS': dict(parse_qsl(parsed_database_url.query)),
+        }
     }
-}
+
+else:
+    # Local Testing: SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 

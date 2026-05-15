@@ -1,6 +1,6 @@
-from rest_framework import serializers
+from rest_framework import serializers  # type: ignore[import]
 
-from apps.challenges.models import ChallengeQuestion
+from apps.challenges.models import Challenge, ChallengeQuestion
 from apps.challenges.serializers import (
     ChallengeDetailSerializer,
     ChallengeQuestionAdminSerializer,
@@ -11,42 +11,47 @@ from apps.challenges.serializers import (
 
 from .models import DailyChallenge
 
+class DailyChallengeSerializer(serializers.ModelSerializer):
+    # Include fields from the related Challenge model
+    title = serializers.CharField(source='challenge.title')
+    description = serializers.CharField(source='challenge.description')
+    lesson = serializers.PrimaryKeyRelatedField(source='challenge.lesson', read_only=True)
+    module = serializers.PrimaryKeyRelatedField(source='challenge.module', read_only=True)
+    category = serializers.PrimaryKeyRelatedField(source='challenge.category', read_only=True)
+    difficulty = serializers.ChoiceField(source='challenge.difficulty', choices=Challenge.DIFFICULTY_CHOICES)
+    is_daily = serializers.BooleanField(read_only=True, default=True)
+    
+    # Allow writing to nested challenge fields
+    challenge_data = serializers.DictField(write_only=True, required=False)
 
-class DailyChallengeSerializer(ChallengeSerializer):
-    class Meta(ChallengeSerializer.Meta):
+    class Meta:
         model = DailyChallenge
         fields = [
-            'id',
-            'is_daily',
-            'date',
-            'title',
-            'description',
-            'difficulty',
-            'points',
-            'time_limit_minutes',
-            'created_at',
-            'scope',
-            'scope_display',
-            'lesson',
-            'module',
-            'category',
+            'id', 'challenge', 'date', 'title', 'description', 
+            'lesson', 'module', 'category', 'difficulty', 'is_daily', 
+            'challenge_data', 'created_at'
         ]
-        read_only_fields = ['id', 'is_daily', 'scope', 'scope_display']
 
-    def validate(self, attrs):
-        attrs = dict(attrs)
-        attrs['is_daily'] = True
+    def to_internal_value(self, data):
+        # Strip out read-only proxy fields if they are sent in the request
+        # to prevent validation errors, relying on challenge_data or challenge ID instead
+        ignore_fields = ['title', 'description', 'lesson', 'module', 'category', 'difficulty', 'is_daily']
+        for field in ignore_fields:
+            data.pop(field, None)
+        return super().to_internal_value(data)
 
-        lesson = attrs.get('lesson', getattr(self.instance, 'lesson', None) if self.instance else None)
-        module = attrs.get('module', getattr(self.instance, 'module', None) if self.instance else None)
-        category = attrs.get('category', getattr(self.instance, 'category', None) if self.instance else None)
-        if lesson or module or category:
-            raise serializers.ValidationError('Daily challenges cannot be bound to lesson, module, or category.')
-
-        if not attrs.get('date') and not getattr(self.instance, 'date', None):
-            raise serializers.ValidationError({'date': 'Daily challenge date is required.'})
-
-        return attrs
+    def create(self, validated_data):
+        challenge_data = validated_data.pop('challenge_data', {})
+        
+        # If challenge_data is provided, create the underlying Challenge first
+        if challenge_data:
+            challenge = Challenge.objects.create(
+                is_daily=True,
+                **challenge_data
+            )
+            validated_data['challenge'] = challenge
+        
+        return super().create(validated_data)
 
 
 class DailyChallengeDetailSerializer(DailyChallengeSerializer, ChallengeDetailSerializer):
