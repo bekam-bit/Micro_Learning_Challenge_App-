@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, date
 
 from django.utils import timezone
 from django.contrib.auth import get_user_model
@@ -13,9 +13,7 @@ from apps.lessons.models import Lesson
 from apps.modules.models import Module
 from apps.quiz.models.Quiz import Quiz
 
-from .models import Notification
-from .models import NotificationRetentionSetting
-
+from .models import Notification, NotificationRetentionSetting
 
 User = get_user_model()
 
@@ -80,14 +78,18 @@ class NotificationAutomationAndApiTests(APITestCase):
 	def test_daily_challenge_creation_notifies_learners(self):
 		Notification.objects.all().delete()
 
-		DailyChallenge.objects.create(
-			title='Daily Notification Challenge',
-			description='Daily challenge for notification test',
-			difficulty='easy',
-			points=10,
-			time_limit_minutes=15,
-			is_daily=True,
-			date=timezone.localdate(),
+		challenge = Challenge.objects.create(
+    				title="Daily Test",
+					description="Test Desc",
+					difficulty="easy",
+					is_daily=True
+    # Add lesson/module/category if required by your model constraints
+					)
+
+# Then wrap it in DailyChallenge
+		daily_challenge = DailyChallenge.objects.create(
+			challenge=challenge,
+			date=date.today()
 		)
 
 		learner_notifications = Notification.objects.filter(user=self.learner)

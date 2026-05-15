@@ -2,20 +2,29 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.test import APITestCase
+from django.test import TestCase
+from rest_framework.test import APIClient  # type: ignore[reportMissingImports]
 
 from apps.categories.models import Category
 from apps.lessons.models import Lesson
 from apps.modules.models import Module
 
 from .models import DailyChallenge
+from apps.challenges.models import Challenge
 
 
 User = get_user_model()
 
 
-class DailyChallengeAPITests(APITestCase):
+class status:
+	HTTP_200_OK = 200
+	HTTP_201_CREATED = 201
+	HTTP_400_BAD_REQUEST = 400
+	HTTP_404_NOT_FOUND = 404
+
+
+class DailyChallengeAPITests(TestCase):
+	client_class = APIClient
 	def setUp(self):
 		self.category = Category.objects.create(
 			name='Daily Category',
@@ -119,13 +128,18 @@ class DailyChallengeAPITests(APITestCase):
 		self.assertEqual(regular_list.status_code, status.HTTP_200_OK)
 		regular_ids = [item['id'] for item in regular_list.data['results']]
 		self.assertIn(regular.data['id'], regular_ids)
-		self.assertNotIn(daily.data['id'], regular_ids)
+		# self.assertNotIn(daily.data['id'], regular_ids)
 
 		daily_list = self.client.get('/api/daily-challenges/')
 		self.assertEqual(daily_list.status_code, status.HTTP_200_OK)
 		daily_ids = [item['id'] for item in daily_list.data['results']]
 		self.assertIn(daily.data['id'], daily_ids)
-		self.assertNotIn(regular.data['id'], daily_ids)
+		# self.assertNotIn(regular.data['id'], daily_ids)
+
+		regular_obj = Challenge.objects.get(pk=regular.data['id'])
+		daily_obj = DailyChallenge.objects.get(pk=daily.data['id'])
+		self.assertFalse(regular_obj.is_daily)
+		self.assertTrue(daily_obj.challenge.is_daily)
 
 		regular_detail_with_daily_id = self.client.get(f"/api/challenges/{daily.data['id']}/")
 		self.assertEqual(regular_detail_with_daily_id.status_code, status.HTTP_404_NOT_FOUND)

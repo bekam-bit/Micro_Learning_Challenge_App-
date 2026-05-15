@@ -15,6 +15,7 @@ import os
 import sys
 from datetime import timedelta
 from urllib.parse import parse_qsl, urlparse
+from django.core.exceptions import ImproperlyConfigured
 
 
 def _env_bool(name, default=False):
@@ -149,10 +150,17 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Database configuration from DATABASE_URL environment variable
 database_url = os.getenv('DATABASE_URL')
 
-if database_url:
-    parsed_database_url = urlparse(database_url)
+if not database_url:
+    raise ImproperlyConfigured("DATABASE_URL environment variable is required")
+
+parsed_database_url = urlparse(database_url)
+
+if parsed_database_url:
+    # Production: Neon PostgreSQL
+    import dj_database_url
 
     DATABASES = {
         'default': {
@@ -169,6 +177,15 @@ if database_url:
     }
 else:
     # Default to SQLite for local development and testing
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+
+else:
+    # Local Testing: SQLite
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
