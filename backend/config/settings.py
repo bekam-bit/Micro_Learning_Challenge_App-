@@ -163,6 +163,16 @@ if database_url:
             'HOST': parsed_database_url.hostname,
             'PORT': parsed_database_url.port or 5432,
             'OPTIONS': dict(parse_qsl(parsed_database_url.query)),
+            # SSL configuration for NeonDB and other managed PostgreSQL services
+            'CONN_MAX_AGE': 600,  # Connection pooling
+        }
+    }
+else:
+    # Default to SQLite for local development and testing
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 
