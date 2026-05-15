@@ -199,3 +199,37 @@ class DailyChallengeAPITests(TestCase):
 		self.assertEqual(submissions.status_code, status.HTTP_200_OK)
 		self.assertEqual(len(submissions.data['results']), 1)
 		self.assertEqual(submissions.data['results'][0]['challenge'], daily.data['id'])
+
+	def test_admin_can_assign_existing_challenge_as_daily(self):
+		self.client.force_authenticate(user=self.admin_user)
+		source = self.client.post(
+			'/api/challenges/',
+			{
+				'title': 'Reusable Challenge',
+				'description': 'Can be reused for daily challenge',
+				'difficulty': 'medium',
+				'points': 40,
+				'time_limit_minutes': 35,
+				'lesson': self.lesson.id,
+			},
+			format='json',
+		)
+		self.assertEqual(source.status_code, status.HTTP_201_CREATED)
+
+		daily = self.client.post(
+			'/api/daily-challenges/',
+			{
+				'date': str(timezone.localdate() + timedelta(days=2)),
+				'challenge_id': source.data['id'],
+			},
+			format='json',
+		)
+		self.assertEqual(daily.status_code, status.HTTP_201_CREATED)
+
+		daily_obj = DailyChallenge.objects.get(pk=daily.data['id'])
+		source_obj = Challenge.objects.get(pk=source.data['id'])
+
+		self.assertNotEqual(daily_obj.challenge_id, source_obj.id)
+		self.assertTrue(daily_obj.challenge.is_daily)
+		self.assertEqual(daily_obj.challenge.title, source_obj.title)
+		self.assertFalse(source_obj.is_daily)

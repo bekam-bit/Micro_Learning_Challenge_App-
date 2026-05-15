@@ -5,7 +5,7 @@ from apps.challenges.models import Challenge
 class DailyChallenge(models.Model):
     # Use a OneToOneField instead of inheritance to separate ID spaces
     challenge = models.OneToOneField(
-        'challenge.Challenge', 
+        'challenges.Challenge',
         on_delete=models.CASCADE, 
         related_name='daily_profile'
     )
@@ -39,6 +39,18 @@ class DailyChallenge(models.Model):
     @property
     def difficulty(self):
         return self.challenge.difficulty
+
+    @property
+    def points(self):
+        return self.challenge.points
+
+    @property
+    def time_limit_minutes(self):
+        return self.challenge.time_limit_minutes
+
+    @property
+    def questions(self):
+        return self.challenge.questions
 
     @property
     def is_daily(self):

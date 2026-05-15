@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -22,18 +23,18 @@ from .serializers import DailyChallengeDetailSerializer, DailyChallengeSerialize
 class DailyChallengeListCreateView(ChallengeListCreateView):
     is_daily_scope = True
     cache_namespace = 'daily_challenges'
-    queryset = DailyChallenge.objects.select_related('lesson', 'module', 'category').all()
+    queryset = DailyChallenge.objects.select_related('challenge', 'challenge__lesson', 'challenge__module', 'challenge__category').all()
     serializer_class = DailyChallengeSerializer
 
     def get_base_queryset(self):
-        return DailyChallenge.objects.select_related('lesson', 'module', 'category').all()
+        return DailyChallenge.objects.select_related('challenge', 'challenge__lesson', 'challenge__module', 'challenge__category').all()
 
     def get_queryset(self):
         queryset = self.get_base_queryset()
 
         difficulty = self.request.query_params.get('difficulty')
         if difficulty:
-            queryset = queryset.filter(difficulty=difficulty)
+            queryset = queryset.filter(challenge__difficulty=difficulty)
 
         date_value = self.request.query_params.get('date')
         if date_value:
@@ -41,14 +42,22 @@ class DailyChallengeListCreateView(ChallengeListCreateView):
 
         search = self.request.query_params.get('search')
         if search:
-            queryset = queryset.filter(title__icontains=search)
+            queryset = queryset.filter(challenge__title__icontains=search)
 
         sort_by = self.request.query_params.get('sort_by', '-date')
-        allowed_sort_fields = {'date', '-date', 'title', '-title', 'points', '-points', 'created_at', '-created_at'}
-        if sort_by not in allowed_sort_fields:
-            sort_by = '-date'
+        sort_field_map = {
+            'date': 'date',
+            '-date': '-date',
+            'title': 'challenge__title',
+            '-title': '-challenge__title',
+            'points': 'challenge__points',
+            '-points': '-challenge__points',
+            'created_at': 'created_at',
+            '-created_at': '-created_at',
+        }
+        mapped_sort = sort_field_map.get(sort_by, '-date')
 
-        return queryset.order_by(sort_by, 'id')
+        return queryset.order_by(mapped_sort, 'id')
 
 
 class DailyChallengeTodayView(APIView):
@@ -72,7 +81,7 @@ class DailyChallengeDetailView(ChallengeDetailView):
     cache_namespace = 'daily_challenges'
 
     def get_base_queryset(self):
-        return DailyChallenge.objects.select_related('lesson', 'module', 'category').all()
+        return DailyChallenge.objects.select_related('challenge', 'challenge__lesson', 'challenge__module', 'challenge__category').all()
 
     def get_serializer_class(self):
         if self.request.method in permissions.SAFE_METHODS:
@@ -84,6 +93,23 @@ class DailyChallengeQuestionListCreateView(ChallengeQuestionListCreateView):
     is_daily_scope = True
     cache_namespace = 'daily_challenges'
 
+    def get_queryset(self):
+        daily = get_object_or_404(
+            DailyChallenge.objects.select_related('challenge'),
+            pk=self.kwargs['challenge_id'],
+        )
+        return ChallengeQuestion.objects.filter(challenge_id=daily.challenge_id).order_by('order', 'id')
+
+    def perform_create(self, serializer):
+        daily = get_object_or_404(
+            DailyChallenge.objects.select_related('challenge'),
+            pk=self.kwargs['challenge_id'],
+        )
+        serializer.save(challenge=daily.challenge)
+        from config.api_cache import invalidate_namespace
+
+        invalidate_namespace(self.cache_namespace)
+
 
 class DailyChallengeQuestionDetailView(ChallengeQuestionDetailView):
     queryset = ChallengeQuestion.objects.select_related('challenge').filter(challenge__is_daily=True)
@@ -93,9 +119,23 @@ class DailyChallengeQuestionDetailView(ChallengeQuestionDetailView):
 class DailyChallengeProgressView(ChallengeProgressView):
     is_daily_scope = True
 
+    def get_challenge_or_404(self, challenge_id):
+        daily = get_object_or_404(
+            DailyChallenge.objects.select_related('challenge'),
+            pk=challenge_id,
+        )
+        return daily.challenge
+
 
 class DailyChallengeSubmitView(ChallengeSubmitView):
     is_daily_scope = True
+
+    def get_challenge_or_404(self, challenge_id):
+        daily = get_object_or_404(
+            DailyChallenge.objects.select_related('challenge'),
+            pk=challenge_id,
+        )
+        return daily.challenge
 
 
 class MyDailyChallengeSubmissionsView(MyChallengeSubmissionsView):

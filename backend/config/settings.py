@@ -26,6 +26,13 @@ def _env_list(name, default=''):
     raw = os.getenv(name, default)
     return [item.strip() for item in raw.split(',') if item.strip()]
 
+
+def _clean_env_value(value):
+    if value is None:
+        return value
+    # Normalize accidental escaped newlines from copied env values.
+    return value.replace('\\r', '').replace('\\n', '').strip()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -76,18 +83,27 @@ EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', default=True)
 EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', default=False)
 
 # Security headers and HTTPS settings
-SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', default=not DEBUG)
+if TESTING:
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
+else:
+    SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', default=not DEBUG)
+    SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', default=not DEBUG)
+    CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', default=not DEBUG)
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=not DEBUG)
+    SECURE_HSTS_PRELOAD = _env_bool('SECURE_HSTS_PRELOAD', default=False)
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', default=not DEBUG)
-CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', default=not DEBUG)
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'strict-origin-when-cross-origin')
 X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=not DEBUG)
-SECURE_HSTS_PRELOAD = _env_bool('SECURE_HSTS_PRELOAD', default=False)
 
 
 # Application definition
@@ -151,17 +167,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 # Database configuration from DATABASE_URL environment variable
-database_url = os.getenv('DATABASE_URL')
+database_url = _clean_env_value(os.getenv('DATABASE_URL') or '')
 
 if not database_url:
     raise ImproperlyConfigured("DATABASE_URL environment variable is required")
 
 parsed_database_url = urlparse(database_url)
 
-if parsed_database_url:
-    # Production: Neon PostgreSQL
-    import dj_database_url
+db_options = {
+    _clean_env_value(key): _clean_env_value(value)
+    for key, value in parse_qsl(parsed_database_url.query)
+}
 
+if parsed_database_url:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -170,7 +188,7 @@ if parsed_database_url:
             'PASSWORD': parsed_database_url.password,
             'HOST': parsed_database_url.hostname,
             'PORT': parsed_database_url.port or 5432,
-            'OPTIONS': dict(parse_qsl(parsed_database_url.query)),
+            'OPTIONS': db_options,
             # SSL configuration for NeonDB and other managed PostgreSQL services
             'CONN_MAX_AGE': 600,  # Connection pooling
         }

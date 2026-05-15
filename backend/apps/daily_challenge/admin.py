@@ -15,6 +15,6 @@ class DailyChallengeAdmin(admin.ModelAdmin):
 		'module',
 		'category',
 	)
-	list_filter = ('date', 'difficulty')
-	search_fields = ('title', 'description')
-	list_select_related = ('lesson', 'module', 'category')
+	list_filter = ('date', 'challenge__difficulty')
+	search_fields = ('challenge__title', 'challenge__description')
+	list_select_related = ('challenge', 'challenge__lesson', 'challenge__module', 'challenge__category')
