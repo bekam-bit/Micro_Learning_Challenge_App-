@@ -1,14 +1,20 @@
-# Environment files and secrets
+# Environment files and secrets (NEVER COMMIT THESE!)
 .env
-.env.*
-!.env.local
+.env.local
+.env.*.local
+!.env.example
 
-
-# Local databases and runtime-generated files
+# Database files
 *.sqlite3
+db.sqlite3
+
+# Media and static files
 media/
 staticfiles/
+
+# Log files
 *.log
+logs/
 
 # Python cache and build artifacts
 __pycache__/
@@ -28,3 +34,5 @@ build/
 # Virtual environments
 .venv/
 venv/
+env/
+ENV/

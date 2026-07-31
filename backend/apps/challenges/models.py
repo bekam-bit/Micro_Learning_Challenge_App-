@@ -69,6 +69,24 @@ class Challenge(models.Model):
             models.Index(fields=['created_at'], name='challenge_created_idx'),
         ]
 
+    def clean(self):
+        super().clean()
+
+        owners = [self.lesson_id, self.module_id, self.category_id]
+        owners_count = sum(bool(owner_id) for owner_id in owners)
+
+        if self.is_daily:
+            if owners_count != 0:
+                raise ValidationError('Daily challenges must not be linked to lesson, module, or category.')
+            return
+
+        if owners_count != 1:
+            raise ValidationError('A non-daily challenge must belong to exactly one owner: lesson, module, or category.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     def get_scope(self):
         if self.is_daily:
             return 'daily'

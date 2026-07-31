@@ -61,3 +61,18 @@ Thumbs.db
 *.tar.xz
 *.tar.zst
 ```
+⚡_RESTART_NOW.txt
+❗_FOLLOW_THESE_EXACT_STEPS.md
+🔥_HARDCODED_FIX.md
+🚨_READ_THIS_FIRST.md
+DEBUG_CHECKLIST.txt
+LIVE_BACKEND_SETUP.md
+
+# Temporary documentation and debug files (created during troubleshooting)
+REGISTRATION_FIX.md
+TROUBLESHOOTING.md
+START_SERVERS.md
+LIVE_BACKEND_SETUP.md
+DEBUG_CHECKLIST.txt
+REGISTRATION_FIX.md
+✅_FINAL_FIX_EXPLANATION.md
