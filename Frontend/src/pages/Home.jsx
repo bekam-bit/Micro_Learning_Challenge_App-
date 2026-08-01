@@ -40,7 +40,7 @@ export default function Home() {
       <div className="pt-6 border-t border-slate-800/80 flex items-center justify-between flex-wrap gap-2 text-xs text-slate-500">
         <span>Backend API connected:</span>
         <code className="px-2.5 py-1 bg-slate-950/80 rounded-md border border-slate-800 text-sky-400 font-mono">
-          https://learning-challenge.onrender.com
+          http://127.0.0.1:8000
         </code>
       </div>
     </section>

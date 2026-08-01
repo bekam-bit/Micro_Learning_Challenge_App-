@@ -1,31 +1,10 @@
 import axios from 'axios'
 
-// HARDCODED URL - If this doesn't work, nothing will!
-const BACKEND_URL = 'https://learning-challenge.onrender.com'
+const DEFAULT_BACKEND_URL = 'http://127.0.0.1:8000'
 
-// Support both VITE_API_BASE_URL (local dev) and BACKEND_BASE_URL (Render)
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.BACKEND_BASE_URL || BACKEND_URL
+// Support both VITE_API_BASE_URL (local dev) and BACKEND_BASE_URL (deployment).
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.BACKEND_BASE_URL || DEFAULT_BACKEND_URL
 const baseURL = rawBaseUrl.replace(/\/+$/, '')
-
-console.log('═══════════════════════════════════════════')
-console.log('🔧 API Configuration:', {
-  HARDCODED_URL: BACKEND_URL,
-  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
-  BACKEND_BASE_URL: import.meta.env.BACKEND_BASE_URL,
-  rawBaseUrl,
-  baseURL,
-  finalApiUrl: `${baseURL}/api`,
-  mode: import.meta.env.MODE,
-})
-console.log('═══════════════════════════════════════════')
-
-if (!rawBaseUrl.includes('learning-challenge.onrender.com')) {
-  console.error('❌ ERROR: Using wrong backend URL!')
-  console.error('Expected: https://learning-challenge.onrender.com')
-  console.error('Got:', rawBaseUrl)
-  console.error('Please restart your dev server: Ctrl+C then npm run dev')
-  alert('⚠️ WRONG BACKEND URL! Check console (F12). You need to restart dev server!')
-}
 
 const api = axios.create({
   baseURL: `${baseURL}/api`,
@@ -36,27 +15,12 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
-  
-  console.log('📤 Making request to:', config.baseURL + config.url)
   return config
 })
 
-// Add response interceptor for better error logging
 api.interceptors.response.use(
-  (response) => {
-    console.log('✅ Request successful:', response.config.url, response.status)
-    return response
-  },
+  (response) => response,
   (error) => {
-    console.error('❌ Request failed:', {
-      url: error.config?.url,
-      method: error.config?.method,
-      baseURL: error.config?.baseURL,
-      fullURL: error.config?.baseURL + error.config?.url,
-      status: error.response?.status,
-      message: error.message,
-      data: error.response?.data,
-    })
     return Promise.reject(error)
   }
 )

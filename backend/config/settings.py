@@ -83,7 +83,7 @@ EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', default=True)
 EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', default=False)
 
 # Security headers and HTTPS settings
-if TESTING:
+if TESTING or DEBUG:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
@@ -166,20 +166,21 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Database configuration from DATABASE_URL environment variable
+# Local development should use SQLite by default. Set DJANGO_USE_POSTGRES=True
+# to opt into DATABASE_URL-backed PostgreSQL for production or remote testing.
+use_postgres = _env_bool('DJANGO_USE_POSTGRES', default=not DEBUG)
 database_url = _clean_env_value(os.getenv('DATABASE_URL') or '')
 
-if not database_url:
-    raise ImproperlyConfigured("DATABASE_URL environment variable is required")
+if use_postgres:
+    if not database_url:
+        raise ImproperlyConfigured("DATABASE_URL environment variable is required when DJANGO_USE_POSTGRES is enabled")
 
-parsed_database_url = urlparse(database_url)
+    parsed_database_url = urlparse(database_url)
+    db_options = {
+        _clean_env_value(key): _clean_env_value(value)
+        for key, value in parse_qsl(parsed_database_url.query)
+    }
 
-db_options = {
-    _clean_env_value(key): _clean_env_value(value)
-    for key, value in parse_qsl(parsed_database_url.query)
-}
-
-if parsed_database_url:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -189,12 +190,11 @@ if parsed_database_url:
             'HOST': parsed_database_url.hostname,
             'PORT': parsed_database_url.port or 5432,
             'OPTIONS': db_options,
-            # SSL configuration for NeonDB and other managed PostgreSQL services
-            'CONN_MAX_AGE': 600,  # Connection pooling
+            # Connection pooling for managed PostgreSQL services.
+            'CONN_MAX_AGE': 600,
         }
     }
 else:
-    # Default to SQLite for local development and testing
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
