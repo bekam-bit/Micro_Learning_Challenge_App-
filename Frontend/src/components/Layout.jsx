@@ -1,5 +1,5 @@
-import { Link, NavLink } from 'react-router'
-import { useAuth } from '../auth/AuthContext'
+import { NavLink } from 'react-router'
+import { useAuth } from '../auth/useAuth'
 
 export default function Layout({ children }) {
   const { user, loading, logout } = useAuth()
@@ -100,4 +100,4 @@ export default function Layout({ children }) {
       <main className="flex-1 flex flex-col">{children}</main>
     </div>
   )
-}
+}

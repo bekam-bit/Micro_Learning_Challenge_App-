@@ -1,6 +1,5 @@
 import axios from 'axios'
 
-const DEFAULT_BACKEND_URL = 'https://learning-challenge.onrender.com'
 const DEFAULT_API_BASE_URL = '/api'
 
 // Support direct deployment URLs and local dev proxying through /api.
@@ -13,6 +12,9 @@ const api = axios.create({
   timeout: 30000, // 30 second timeout
 })
 
+const RETRYABLE_STATUS_CODES = new Set([502, 503, 504])
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 // Attach access token if present
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
@@ -22,7 +24,16 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const status = error.response?.status
+    const config = error.config
+
+    if (config && RETRYABLE_STATUS_CODES.has(status) && !config.__retryOnce) {
+      config.__retryOnce = true
+      await wait(1500)
+      return api.request(config)
+    }
+
     return Promise.reject(error)
   }
 )
@@ -30,6 +41,11 @@ api.interceptors.response.use(
 export function formatApiError(err, fallback = 'An unexpected error occurred.') {
   if (!err) return fallback
   if (typeof err === 'string') return err
+
+  const status = err.response?.status
+  if (RETRYABLE_STATUS_CODES.has(status)) {
+    return 'Server is temporarily unavailable (it may be waking up). Please retry in a few seconds.'
+  }
 
   const data = err.response?.data
   if (!data) {

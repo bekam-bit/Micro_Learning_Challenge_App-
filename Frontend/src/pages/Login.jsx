@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router'
 import { formatApiError } from '../api/axios'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -98,4 +98,4 @@ export default function Login() {
     </section>
   )
 }
-
+
