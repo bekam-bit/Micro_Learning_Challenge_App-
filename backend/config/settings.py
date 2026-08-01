@@ -166,15 +166,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Local development should use SQLite by default. Set DJANGO_USE_POSTGRES=True
-# to opt into DATABASE_URL-backed PostgreSQL for production or remote testing.
-use_postgres = _env_bool('DJANGO_USE_POSTGRES', default=not DEBUG)
 database_url = _clean_env_value(os.getenv('DATABASE_URL') or '')
+use_postgres = bool(database_url)
 
 if use_postgres:
-    if not database_url:
-        raise ImproperlyConfigured("DATABASE_URL environment variable is required when DJANGO_USE_POSTGRES is enabled")
-
     parsed_database_url = urlparse(database_url)
     db_options = {
         _clean_env_value(key): _clean_env_value(value)

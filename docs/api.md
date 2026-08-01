@@ -362,7 +362,7 @@ The quiz app is exposed through a DRF `DefaultRouter`.
 
 ## Production Notes
 
-- The project supports SQLite locally and PostgreSQL in production.
+- The project uses SQLite when `DATABASE_URL` is absent and PostgreSQL/Neon when `DATABASE_URL` is present.
 - `backend/requirements.txt` delegates to the root `requirements.txt` file.
 - Deployment-specific environment variables and guidance live in [DEPLOYMENT.md](../DEPLOYMENT.md).
 - Summary endpoints may use short-lived caching in production.

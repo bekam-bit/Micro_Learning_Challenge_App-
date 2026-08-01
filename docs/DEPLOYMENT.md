@@ -2,11 +2,11 @@
 
 ## Database Configuration
 
-This project supports both SQLite (for local development/testing) and PostgreSQL (for production).
+This project uses SQLite when `DATABASE_URL` is not set and PostgreSQL/Neon when `DATABASE_URL` is present.
 
 ### Local Development (SQLite)
 
-For local development, simply do not set the `DATABASE_URL` environment variable. The application will automatically use SQLite:
+For local development, leave `DATABASE_URL` unset. The application will automatically use SQLite:
 
 ```bash
 # No DATABASE_URL needed - SQLite is used by default
@@ -20,7 +20,7 @@ cp backend/.env.local.example backend/.env
 
 ### Production Deployment (NeonDB PostgreSQL)
 
-For production, set the `DATABASE_URL` environment variable with your NeonDB connection string:
+For production, set the `DATABASE_URL` environment variable with your NeonDB connection string. The app will automatically switch to PostgreSQL when this variable is present:
 
 ```bash
 DATABASE_URL=postgresql://username:password@host.neon.tech/database_name?sslmode=require
@@ -43,7 +43,7 @@ DATABASE_URL=postgresql://username:password@host.neon.tech/database_name?sslmode
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | NeonDB PostgreSQL connection string | `postgresql://user:pass@host.neon.tech/db?sslmode=require` |
+| `DATABASE_URL` | NeonDB PostgreSQL connection string. When set, PostgreSQL is used automatically. | `postgresql://user:pass@host.neon.tech/db?sslmode=require` |
 | `DJANGO_SECRET_KEY` | Django secret key (generate with `django-admin shell` → `from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())`) | `your-secret-key` |
 | `DJANGO_DEBUG` | Must be `False` in production | `False` |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated list of allowed domains | `yourdomain.com,www.yourdomain.com` |
@@ -78,7 +78,7 @@ python manage.py runserver
 
 ## Testing
 
-Tests always use SQLite in-memory database regardless of `DATABASE_URL`:
+Tests use SQLite in-memory database regardless of `DATABASE_URL`:
 
 ```bash
 cd backend
