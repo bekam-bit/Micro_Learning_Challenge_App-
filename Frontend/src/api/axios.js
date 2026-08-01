@@ -1,13 +1,15 @@
 import axios from 'axios'
 
-const DEFAULT_BACKEND_URL = 'http://127.0.0.1:8000'
+const DEFAULT_BACKEND_URL = 'https://learning-challenge.onrender.com'
+const DEFAULT_API_BASE_URL = '/api'
 
-// Support both VITE_API_BASE_URL (local dev) and BACKEND_BASE_URL (deployment).
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.BACKEND_BASE_URL || DEFAULT_BACKEND_URL
+// Support direct deployment URLs and local dev proxying through /api.
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.BACKEND_BASE_URL || DEFAULT_API_BASE_URL
 const baseURL = rawBaseUrl.replace(/\/+$/, '')
+const apiBaseURL = baseURL.startsWith('http') ? `${baseURL}/api` : baseURL
 
 const api = axios.create({
-  baseURL: `${baseURL}/api`,
+  baseURL: apiBaseURL,
   timeout: 30000, // 30 second timeout
 })
 
