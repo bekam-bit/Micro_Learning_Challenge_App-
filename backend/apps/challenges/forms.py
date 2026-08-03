@@ -59,66 +59,76 @@ class ChallengeQuestionAdminForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
 
-        question_type = cleaned_data.get('question_type')
-        options = cleaned_data.get('options') or []
-        correct_options = cleaned_data.get('correct_options') or []
-        correct_answer = (cleaned_data.get('correct_answer') or '').strip()
-        numeric_tolerance = cleaned_data.get('numeric_tolerance', 0)
+        try:
+            question_type = cleaned_data.get('question_type')
+            options = cleaned_data.get('options') or []
+            correct_options = cleaned_data.get('correct_options') or []
+            correct_answer = (cleaned_data.get('correct_answer') or '').strip()
+            numeric_tolerance = cleaned_data.get('numeric_tolerance', 0)
 
-        # Only validate if we have the necessary data
-        if question_type in {ChallengeQuestion.TYPE_SINGLE_CHOICE, ChallengeQuestion.TYPE_MULTIPLE_CHOICE}:
-            if not options:
-                self.add_error('options', 'Options are required for choice question types.')
-                return cleaned_data
-            
-            # Extract labels from options (they should be objects with 'label' field)
-            option_labels = []
-            for opt in options:
-                if isinstance(opt, dict) and 'label' in opt:
-                    option_labels.append(opt['label'])
-                elif isinstance(opt, str):
-                    option_labels.append(opt)
-            
-            if not option_labels:
-                self.add_error('options', 'Could not extract labels from options. Format: [{"label": "A", "text": "..."}]')
-                return cleaned_data
+            # Only validate if we have the necessary data
+            if question_type in {ChallengeQuestion.TYPE_SINGLE_CHOICE, ChallengeQuestion.TYPE_MULTIPLE_CHOICE}:
+                if not options:
+                    self.add_error('options', 'Options are required for choice question types.')
+                    return cleaned_data
+                
+                # Extract labels from options (they should be objects with 'label' field)
+                option_labels = []
+                for opt in options:
+                    if isinstance(opt, dict) and 'label' in opt:
+                        option_labels.append(opt['label'])
+                    elif isinstance(opt, str):
+                        option_labels.append(opt)
+                
+                if not option_labels:
+                    self.add_error('options', 'Could not extract labels from options. Format: [{"label": "A", "text": "..."}]')
+                    return cleaned_data
 
-            # Validate SINGLE CHOICE
-            if question_type == ChallengeQuestion.TYPE_SINGLE_CHOICE:
-                if not correct_answer:
-                    self.add_error('correct_answer', 'Single choice requires a correct answer.')
-                elif correct_answer not in option_labels:
-                    self.add_error('correct_answer', 
-                        f'Correct answer "{correct_answer}" must be one of: {", ".join(option_labels)}')
+                # Validate SINGLE CHOICE
+                if question_type == ChallengeQuestion.TYPE_SINGLE_CHOICE:
+                    if not correct_answer:
+                        self.add_error('correct_answer', 'Single choice requires a correct answer.')
+                    elif correct_answer not in option_labels:
+                        self.add_error('correct_answer', 
+                            f'Correct answer "{correct_answer}" must be one of: {", ".join(option_labels)}')
 
-            # Validate MULTIPLE CHOICE
-            if question_type == ChallengeQuestion.TYPE_MULTIPLE_CHOICE:
-                if not correct_options:
-                    self.add_error('correct_options', 
-                        f'Multiple choice requires at least one correct option. '
-                        f'Use labels like ["A"] or ["A", "B"]. Available: {", ".join(option_labels)}')
-                else:
-                    # correct_options should already be cleaned (just labels, not objects)
-                    invalid = [label for label in correct_options if label not in option_labels]
-                    if invalid:
+                # Validate MULTIPLE CHOICE
+                if question_type == ChallengeQuestion.TYPE_MULTIPLE_CHOICE:
+                    if not correct_options:
                         self.add_error('correct_options', 
-                            f'Invalid labels: {", ".join(invalid)}. '
-                            f'Must be from: {", ".join(option_labels)}. '
-                            f'Format: ["A"] not [{{"label": "A", "text": "..."}}]')
+                            f'Multiple choice requires at least one correct option. '
+                            f'Use labels like ["A"] or ["A", "B"]. Available: {", ".join(option_labels)}')
+                    else:
+                        # correct_options should already be cleaned (just labels, not objects)
+                        invalid = [label for label in correct_options if label not in option_labels]
+                        if invalid:
+                            self.add_error('correct_options', 
+                                f'Invalid labels: {", ".join(invalid)}. '
+                                f'Must be from: {", ".join(option_labels)}. '
+                                f'Format: ["A"] not [{{"label": "A", "text": "..."}}]')
 
-        # Validate TRUE/FALSE
-        if question_type == ChallengeQuestion.TYPE_TRUE_FALSE:
-            if correct_answer.lower() not in {'true', 'false'}:
-                self.add_error('correct_answer', 'True/False requires correct_answer to be "true" or "false".')
+            # Validate TRUE/FALSE
+            if question_type == ChallengeQuestion.TYPE_TRUE_FALSE:
+                if correct_answer.lower() not in {'true', 'false'}:
+                    self.add_error('correct_answer', 'True/False requires correct_answer to be "true" or "false".')
 
-        # Validate NUMERIC
-        if question_type == ChallengeQuestion.TYPE_NUMERIC:
-            try:
-                float(correct_answer)
-            except (TypeError, ValueError):
-                self.add_error('correct_answer', 'Numeric questions require a numeric correct answer.')
+            # Validate NUMERIC
+            if question_type == ChallengeQuestion.TYPE_NUMERIC:
+                try:
+                    float(correct_answer)
+                except (TypeError, ValueError):
+                    self.add_error('correct_answer', 'Numeric questions require a numeric correct answer.')
 
-            if numeric_tolerance is not None and numeric_tolerance < 0:
-                self.add_error('numeric_tolerance', 'Numeric tolerance must be >= 0.')
+                if numeric_tolerance is not None and numeric_tolerance < 0:
+                    self.add_error('numeric_tolerance', 'Numeric tolerance must be >= 0.')
+
+        except Exception as e:
+            # Catch any unexpected errors and display them
+            self.add_error(None, f'Unexpected validation error: {str(e)}. Check terminal logs for details.')
+            import traceback
+            print("=" * 80)
+            print("FORM VALIDATION ERROR:")
+            print(traceback.format_exc())
+            print("=" * 80)
 
         return cleaned_data

@@ -133,6 +133,16 @@ class ChallengeQuestion(models.Model):
         ordering = ['order', 'id']
 
     def clean(self):
+        """Model-level validation - called after form validation"""
+        # Log for debugging
+        print("=" * 80)
+        print("MODEL CLEAN METHOD CALLED")
+        print(f"Question Type: {self.question_type}")
+        print(f"Options: {self.options}")
+        print(f"Correct Options: {self.correct_options}")
+        print(f"Correct Answer: {self.correct_answer}")
+        print("=" * 80)
+        
         options = self.options or []
         correct_options = self.correct_options or []
         correct_answer = (self.correct_answer or '').strip()
@@ -164,6 +174,9 @@ class ChallengeQuestion(models.Model):
                         else:
                             correct_labels = correct_options
 
+                        print(f"DEBUG - Extracted option labels: {option_labels}")
+                        print(f"DEBUG - Extracted correct labels: {correct_labels}")
+
                         invalid = [value for value in correct_labels if value not in option_labels]
                         if invalid:
                             errors['correct_options'] = f'Each correct option must be a valid option label. Invalid: {", ".join(str(v) for v in invalid)}'
@@ -181,6 +194,7 @@ class ChallengeQuestion(models.Model):
                 errors['numeric_tolerance'] = 'Numeric tolerance must be greater than or equal to zero.'
 
         if errors:
+            print(f"MODEL VALIDATION ERRORS: {errors}")
             raise ValidationError(errors)
 
     def __str__(self):
