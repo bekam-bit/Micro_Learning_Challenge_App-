@@ -123,7 +123,7 @@ class ChallengeQuestion(models.Model):
     question_type = models.CharField(max_length=30, choices=QUESTION_TYPE_CHOICES, default=TYPE_SHORT_TEXT_STRICT)
     options = models.JSONField(default=list, blank=True)
     correct_options = models.JSONField(default=list, blank=True)
-    correct_answer = models.TextField()
+    correct_answer = models.TextField(blank=True, default='')
     numeric_tolerance = models.FloatField(default=0)
     explanation = models.TextField(blank=True, default='')
     max_score = models.PositiveIntegerField(default=1)
