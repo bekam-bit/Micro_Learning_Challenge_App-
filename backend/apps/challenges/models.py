@@ -138,22 +138,35 @@ class ChallengeQuestion(models.Model):
         correct_answer = (self.correct_answer or '').strip()
         errors = {}
 
-        if self.question_type in {self.TYPE_SINGLE_CHOICE, self.TYPE_MULTIPLE_CHOICE} and not options:
-            errors['options'] = 'Options are required for choice question types.'
-
-        if self.question_type == self.TYPE_SINGLE_CHOICE:
-            if not correct_answer:
-                errors['correct_answer'] = 'Single choice requires a correct answer.'
-            elif correct_answer not in options:
-                errors['correct_answer'] = 'Correct answer must be one of the available options.'
-
-        if self.question_type == self.TYPE_MULTIPLE_CHOICE:
-            if not correct_options:
-                errors['correct_options'] = 'Multiple choice requires at least one correct option.'
+        if self.question_type in {self.TYPE_SINGLE_CHOICE, self.TYPE_MULTIPLE_CHOICE}:
+            if not options:
+                errors['options'] = 'Options are required for choice question types.'
             else:
-                invalid = [value for value in correct_options if value not in options]
-                if invalid:
-                    errors['correct_options'] = 'Each correct option must exist in options.'
+                # Extract labels from options if they're objects
+                if options and isinstance(options[0], dict):
+                    option_labels = [opt.get('label') for opt in options if isinstance(opt, dict) and 'label' in opt]
+                else:
+                    option_labels = options
+
+                if self.question_type == self.TYPE_SINGLE_CHOICE:
+                    if not correct_answer:
+                        errors['correct_answer'] = 'Single choice requires a correct answer.'
+                    elif correct_answer not in option_labels:
+                        errors['correct_answer'] = f'Correct answer "{correct_answer}" must be one of the available option labels: {", ".join(option_labels)}'
+
+                if self.question_type == self.TYPE_MULTIPLE_CHOICE:
+                    if not correct_options:
+                        errors['correct_options'] = 'Multiple choice requires at least one correct option.'
+                    else:
+                        # Extract labels from correct_options if they're objects
+                        if correct_options and isinstance(correct_options[0], dict):
+                            correct_labels = [opt.get('label') for opt in correct_options if isinstance(opt, dict) and 'label' in opt]
+                        else:
+                            correct_labels = correct_options
+
+                        invalid = [value for value in correct_labels if value not in option_labels]
+                        if invalid:
+                            errors['correct_options'] = f'Each correct option must be a valid option label. Invalid: {", ".join(str(v) for v in invalid)}'
 
         if self.question_type == self.TYPE_TRUE_FALSE:
             if correct_answer.lower() not in {'true', 'false'}:

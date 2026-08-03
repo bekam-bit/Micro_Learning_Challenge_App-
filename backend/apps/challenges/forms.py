@@ -1,4 +1,5 @@
 from django import forms
+import json
 
 from .models import ChallengeQuestion
 
@@ -7,6 +8,53 @@ class ChallengeQuestionAdminForm(forms.ModelForm):
     class Meta:
         model = ChallengeQuestion
         fields = '__all__'
+        help_texts = {
+            'options': 'For choice questions: [{"label": "A", "text": "Option A"}, {"label": "B", "text": "Option B"}]',
+            'correct_options': 'For MULTIPLE choice: Use labels only like ["A"] or ["A", "B"]. NOT full objects!',
+            'correct_answer': 'For SINGLE choice: Use label only like "A". For True/False: "true" or "false". For Numeric: a number.',
+        }
+
+    def clean_options(self):
+        """Validate and clean the options field"""
+        options = self.cleaned_data.get('options')
+        
+        if not options:
+            return []
+        
+        # Ensure it's a list
+        if not isinstance(options, list):
+            raise forms.ValidationError('Options must be a JSON array.')
+        
+        # Validate each option has required fields
+        for idx, opt in enumerate(options):
+            if isinstance(opt, dict):
+                if 'label' not in opt:
+                    raise forms.ValidationError(f'Option {idx + 1} is missing "label" field.')
+                if 'text' not in opt:
+                    raise forms.ValidationError(f'Option {idx + 1} is missing "text" field.')
+        
+        return options
+
+    def clean_correct_options(self):
+        """Validate and clean the correct_options field"""
+        correct_options = self.cleaned_data.get('correct_options')
+        
+        if not correct_options:
+            return []
+        
+        # Ensure it's a list
+        if not isinstance(correct_options, list):
+            raise forms.ValidationError('Correct options must be a JSON array like ["A"] or ["A", "B"].')
+        
+        # Check if user mistakenly provided full objects
+        if correct_options and isinstance(correct_options[0], dict):
+            raise forms.ValidationError(
+                'Correct options should be an array of labels like ["A"] or ["A", "B"], '
+                'NOT full objects. You provided full objects. '
+                'Just use the labels from your options.'
+            )
+        
+        return correct_options
 
     def clean(self):
         cleaned_data = super().clean()
@@ -17,27 +65,53 @@ class ChallengeQuestionAdminForm(forms.ModelForm):
         correct_answer = (cleaned_data.get('correct_answer') or '').strip()
         numeric_tolerance = cleaned_data.get('numeric_tolerance', 0)
 
-        if question_type in {ChallengeQuestion.TYPE_SINGLE_CHOICE, ChallengeQuestion.TYPE_MULTIPLE_CHOICE} and not options:
-            self.add_error('options', 'Options are required for choice question types.')
+        # Only validate if we have the necessary data
+        if question_type in {ChallengeQuestion.TYPE_SINGLE_CHOICE, ChallengeQuestion.TYPE_MULTIPLE_CHOICE}:
+            if not options:
+                self.add_error('options', 'Options are required for choice question types.')
+                return cleaned_data
+            
+            # Extract labels from options (they should be objects with 'label' field)
+            option_labels = []
+            for opt in options:
+                if isinstance(opt, dict) and 'label' in opt:
+                    option_labels.append(opt['label'])
+                elif isinstance(opt, str):
+                    option_labels.append(opt)
+            
+            if not option_labels:
+                self.add_error('options', 'Could not extract labels from options. Format: [{"label": "A", "text": "..."}]')
+                return cleaned_data
 
-        if question_type == ChallengeQuestion.TYPE_SINGLE_CHOICE:
-            if not correct_answer:
-                self.add_error('correct_answer', 'Single choice requires a correct answer.')
-            elif correct_answer not in options:
-                self.add_error('correct_answer', 'Correct answer must be one of the available options.')
+            # Validate SINGLE CHOICE
+            if question_type == ChallengeQuestion.TYPE_SINGLE_CHOICE:
+                if not correct_answer:
+                    self.add_error('correct_answer', 'Single choice requires a correct answer.')
+                elif correct_answer not in option_labels:
+                    self.add_error('correct_answer', 
+                        f'Correct answer "{correct_answer}" must be one of: {", ".join(option_labels)}')
 
-        if question_type == ChallengeQuestion.TYPE_MULTIPLE_CHOICE:
-            if not correct_options:
-                self.add_error('correct_options', 'Multiple choice requires at least one correct option.')
-            else:
-                invalid = [value for value in correct_options if value not in options]
-                if invalid:
-                    self.add_error('correct_options', 'Each correct option must exist in options.')
+            # Validate MULTIPLE CHOICE
+            if question_type == ChallengeQuestion.TYPE_MULTIPLE_CHOICE:
+                if not correct_options:
+                    self.add_error('correct_options', 
+                        f'Multiple choice requires at least one correct option. '
+                        f'Use labels like ["A"] or ["A", "B"]. Available: {", ".join(option_labels)}')
+                else:
+                    # correct_options should already be cleaned (just labels, not objects)
+                    invalid = [label for label in correct_options if label not in option_labels]
+                    if invalid:
+                        self.add_error('correct_options', 
+                            f'Invalid labels: {", ".join(invalid)}. '
+                            f'Must be from: {", ".join(option_labels)}. '
+                            f'Format: ["A"] not [{{"label": "A", "text": "..."}}]')
 
+        # Validate TRUE/FALSE
         if question_type == ChallengeQuestion.TYPE_TRUE_FALSE:
             if correct_answer.lower() not in {'true', 'false'}:
-                self.add_error('correct_answer', 'True/False requires correct_answer to be true or false.')
+                self.add_error('correct_answer', 'True/False requires correct_answer to be "true" or "false".')
 
+        # Validate NUMERIC
         if question_type == ChallengeQuestion.TYPE_NUMERIC:
             try:
                 float(correct_answer)
@@ -45,6 +119,6 @@ class ChallengeQuestionAdminForm(forms.ModelForm):
                 self.add_error('correct_answer', 'Numeric questions require a numeric correct answer.')
 
             if numeric_tolerance is not None and numeric_tolerance < 0:
-                self.add_error('numeric_tolerance', 'Numeric tolerance must be greater than or equal to zero.')
+                self.add_error('numeric_tolerance', 'Numeric tolerance must be >= 0.')
 
         return cleaned_data
