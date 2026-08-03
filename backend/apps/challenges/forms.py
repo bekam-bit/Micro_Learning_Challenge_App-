@@ -66,6 +66,13 @@ class ChallengeQuestionAdminForm(forms.ModelForm):
             correct_answer = (cleaned_data.get('correct_answer') or '').strip()
             numeric_tolerance = cleaned_data.get('numeric_tolerance', 0)
 
+            print("=" * 80)
+            print("FORM CLEAN METHOD")
+            print(f"Has challenge: {cleaned_data.get('challenge') is not None}")
+            print(f"Has question_text: {bool(cleaned_data.get('question_text'))}")
+            print(f"Form errors so far: {self.errors}")
+            print("=" * 80)
+
             # Only validate if we have the necessary data
             if question_type in {ChallengeQuestion.TYPE_SINGLE_CHOICE, ChallengeQuestion.TYPE_MULTIPLE_CHOICE}:
                 if not options:
@@ -124,11 +131,14 @@ class ChallengeQuestionAdminForm(forms.ModelForm):
 
         except Exception as e:
             # Catch any unexpected errors and display them
-            self.add_error(None, f'Unexpected validation error: {str(e)}. Check terminal logs for details.')
-            import traceback
+            error_msg = f'Unexpected validation error: {str(e)}. Check terminal logs for details.'
+            self.add_error(None, error_msg)
             print("=" * 80)
-            print("FORM VALIDATION ERROR:")
-            print(traceback.format_exc())
+            print("FORM VALIDATION EXCEPTION:")
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
             print("=" * 80)
 
+        print(f"Form errors after clean: {self.errors}")
         return cleaned_data

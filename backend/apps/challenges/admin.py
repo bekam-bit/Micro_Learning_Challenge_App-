@@ -26,6 +26,23 @@ class ChallengeQuestionAdmin(admin.ModelAdmin):
 
 	class Media:
 		js = ('admin/challenge_question_form.js',)
+	
+	def save_model(self, request, obj, form, change):
+		"""Override save to add debugging"""
+		try:
+			print("=" * 80)
+			print("ADMIN SAVE_MODEL CALLED")
+			print(f"Is valid: {form.is_valid()}")
+			print(f"Form errors: {form.errors}")
+			print(f"Form non-field errors: {form.non_field_errors()}")
+			print("=" * 80)
+			super().save_model(request, obj, form, change)
+			print("✅ SAVE SUCCESSFUL!")
+		except Exception as e:
+			print(f"❌ SAVE FAILED: {e}")
+			import traceback
+			traceback.print_exc()
+			raise
 
 
 @admin.register(ChallengeAttempt)
