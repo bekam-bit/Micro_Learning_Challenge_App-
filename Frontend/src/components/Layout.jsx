@@ -35,6 +35,20 @@ export default function Layout({ children }) {
           >
             Home
           </NavLink>
+          {user && (
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) =>
+                `px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  isActive
+                    ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-sm shadow-sky-500/10'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+                }`
+              }
+            >
+              Dashboard
+            </NavLink>
+          )}
           <NavLink
             to="/challenges"
             className={({ isActive }) =>
@@ -47,6 +61,20 @@ export default function Layout({ children }) {
           >
             Challenges
           </NavLink>
+          {user && (
+            <NavLink
+              to="/submissions"
+              className={({ isActive }) =>
+                `px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  isActive
+                    ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-sm shadow-sky-500/10'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+                }`
+              }
+            >
+              My Submissions
+            </NavLink>
+          )}
           <NavLink
             to="/login"
             className={({ isActive }) =>

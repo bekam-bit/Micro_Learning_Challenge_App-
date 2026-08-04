@@ -567,3 +567,44 @@ class MyChallengeSubmissionsView(generics.ListAPIView):
             queryset = queryset.filter(challenge_id=challenge_id)
 
         return queryset
+
+
+class ChallengeSubmissionDetailView(generics.RetrieveAPIView):
+    """
+    Get a specific submission with full graded results including
+    correct answers, scores, and explanations.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsLearnerRole]
+    
+    def get(self, request, challenge_id):
+        try:
+            # Get the user's submission for this challenge
+            submission = ChallengeSubmission.objects.select_related(
+                'challenge', 'user', 'attempt'
+            ).get(
+                challenge_id=challenge_id,
+                user=request.user
+            )
+            
+            # Get the attempt with answers
+            attempt = submission.attempt
+            if not attempt:
+                return Response(
+                    {'detail': 'No attempt found for this submission.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Build the full response with graded data
+            response_data = _build_submission_response(
+                submission,
+                attempt,
+                replayed=False
+            )
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except ChallengeSubmission.DoesNotExist:
+            return Response(
+                {'detail': 'No submission found for this challenge.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
