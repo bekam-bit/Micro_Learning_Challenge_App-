@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { fetchChallenge, submitAttempt, fetchMySubmissions, fetchChallengeProgress, fetchChallengeSubmissionResult } from '../api/challenges'
-import { useParams, Link } from 'react-router'
+import { useParams, Link, useNavigate } from 'react-router'
 
 export default function ChallengeDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [challenge, setChallenge] = useState(null)
   const [loading, setLoading] = useState(true)
   const [answers, setAnswers] = useState({})
@@ -23,6 +24,12 @@ export default function ChallengeDetail() {
           .then((submissionData) => {
             if (submissionData.results && submissionData.results.length > 0) {
               setHasSubmitted(true)
+              // Redirect to submissions page after a short delay
+              setTimeout(() => {
+                navigate('/submissions', { 
+                  state: { message: 'This challenge has already been completed. View your submission below.' }
+                })
+              }, 2000)
             }
           })
           .catch(() => {
@@ -33,7 +40,7 @@ export default function ChallengeDetail() {
         console.error('Error loading challenge:', err)
         setLoading(false)
       })
-  }, [id])
+  }, [id, navigate])
 
   if (loading) {
     return (
@@ -330,7 +337,7 @@ export default function ChallengeDetail() {
             <span className="text-6xl block">✅</span>
             <h2 className="text-2xl font-bold text-white">Challenge Already Completed</h2>
             <p className="text-slate-400 text-sm max-w-md mx-auto">
-              You've already submitted this challenge. View your detailed results and scores in your submission history.
+              You've already submitted this challenge. Redirecting you to your submission history...
             </p>
             <div className="flex gap-3 justify-center pt-4">
               <Link

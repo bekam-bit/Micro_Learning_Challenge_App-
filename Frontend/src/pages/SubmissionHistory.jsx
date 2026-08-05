@@ -424,12 +424,14 @@ export default function SubmissionHistory() {
                     <div className="text-right">
                       <div className="text-2xl font-bold text-sky-400">
                         {submission.results?.total_score || submission.score || 0}
+                        <span className="text-sm text-slate-500">/{submission.challenge_max_score || '?'}</span>
                       </div>
                       <div className="text-xs text-slate-400">Score</div>
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-emerald-400">
                         +{submission.points_awarded}
+                        <span className="text-sm text-slate-500">/{submission.challenge_points || '?'}</span>
                       </div>
                       <div className="text-xs text-slate-400">Points</div>
                     </div>

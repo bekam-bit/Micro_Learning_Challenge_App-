@@ -73,6 +73,9 @@ class ChallengeDetailSerializer(ChallengeSerializer):
 
 class ChallengeSubmissionSerializer(serializers.ModelSerializer):
     challenge_title = serializers.CharField(source='challenge.title', read_only=True)
+    challenge_max_score = serializers.SerializerMethodField()
+    challenge_points = serializers.CharField(source='challenge.points', read_only=True)
+    points_awarded = serializers.SerializerMethodField()
     is_within_time_limit = serializers.BooleanField(source='attempt.is_within_time_limit', read_only=True)
     challenge_deadline_at = serializers.DateTimeField(source='attempt.deadline_at', read_only=True)
     completion_time_seconds = serializers.SerializerMethodField()
@@ -84,11 +87,14 @@ class ChallengeSubmissionSerializer(serializers.ModelSerializer):
             'id',
             'challenge',
             'challenge_title',
+            'challenge_max_score',
+            'challenge_points',
             'user',
             'attempt',
             'response_text',
             'status',
             'score',
+            'points_awarded',
             'submitted_at',
             'updated_at',
             'is_within_time_limit',
@@ -96,7 +102,24 @@ class ChallengeSubmissionSerializer(serializers.ModelSerializer):
             'completion_time_seconds',
             'submission_timing_status',
         ]
-        read_only_fields = ['id', 'challenge', 'challenge_title', 'user', 'status', 'score', 'submitted_at', 'updated_at']
+        read_only_fields = ['id', 'challenge', 'challenge_title', 'challenge_max_score', 'challenge_points', 'user', 'status', 'score', 'points_awarded', 'submitted_at', 'updated_at']
+
+    def get_challenge_max_score(self, obj):
+        """Calculate total max score from all questions in the challenge"""
+        from django.db.models import Sum
+        total = obj.challenge.questions.aggregate(Sum('max_score'))['max_score__sum']
+        return total or 0
+
+    def get_points_awarded(self, obj):
+        """Get points awarded from the attempt"""
+        if obj.attempt and hasattr(obj.attempt, 'points_awarded'):
+            return obj.attempt.points_awarded
+        # Fallback: calculate based on score and challenge points
+        if obj.score and obj.challenge.points:
+            max_score = self.get_challenge_max_score(obj)
+            if max_score > 0:
+                return int((obj.score / max_score) * obj.challenge.points)
+        return 0
 
     def get_completion_time_seconds(self, obj):
         if not obj.attempt or not obj.attempt.started_at or not obj.attempt.submitted_at:

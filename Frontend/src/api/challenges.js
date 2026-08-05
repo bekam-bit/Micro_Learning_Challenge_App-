@@ -33,13 +33,6 @@ export async function fetchChallengeProgress(challengeId){
   return res.data
 }
 
-export async function fetchSubmissionById(submissionId){
-  // This should fetch the full submission with results
-  // We'll need to check if there's an endpoint for this
-  const res = await api.get(`/challenges/submissions/${submissionId}/`)
-  return res.data
-}
-
 export async function fetchChallengeSubmissionResult(challengeId){
   const res = await api.get(`/challenges/${challengeId}/result/`)
   return res.data

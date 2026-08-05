@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchChallenges } from '../api/challenges'
+import { fetchChallenges, fetchMySubmissions } from '../api/challenges'
 import { Link } from 'react-router'
 
 export default function ChallengesList() {
@@ -8,9 +8,25 @@ export default function ChallengesList() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetchChallenges()
-      .then((data) => {
-        setChallenges(data.results || data)
+    // Load both challenges and user's submissions
+    Promise.all([
+      fetchChallenges(),
+      fetchMySubmissions() // Get all submissions to filter out completed challenges
+    ])
+      .then(([challengesData, submissionsData]) => {
+        const allChallenges = challengesData.results || challengesData
+        
+        // Get IDs of challenges the user has already submitted
+        const submittedChallengeIds = new Set(
+          (submissionsData.results || []).map(sub => sub.challenge)
+        )
+        
+        // Filter out completed challenges
+        const availableChallenges = allChallenges.filter(
+          challenge => !submittedChallengeIds.has(challenge.id)
+        )
+        
+        setChallenges(availableChallenges)
         setLoading(false)
       })
       .catch((err) => {
@@ -78,8 +94,16 @@ export default function ChallengesList() {
       )}
 
       {challenges.length === 0 && !error && (
-        <div className="text-center py-16 bg-slate-900/50 border border-slate-800 rounded-2xl">
-          <p className="text-slate-400 text-base">No challenges available right now.</p>
+        <div className="text-center py-16 bg-slate-900/50 border border-slate-800 rounded-2xl space-y-4">
+          <span className="text-5xl">🎉</span>
+          <p className="text-slate-300 text-lg font-semibold">All challenges completed!</p>
+          <p className="text-slate-400 text-sm">You've completed all available challenges. Check back later for new ones!</p>
+          <Link
+            to="/submissions"
+            className="inline-block mt-4 px-6 py-3 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg transition-all"
+          >
+            View Your Submissions 📋
+          </Link>
         </div>
       )}
 
