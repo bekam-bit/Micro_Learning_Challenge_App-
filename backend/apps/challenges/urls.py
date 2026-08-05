@@ -9,6 +9,7 @@ from .views import (
     ChallengeSubmitView,
     MyChallengeSubmissionsView,
     ChallengeSubmissionDetailView,
+    SubmissionDetailByIdView,
 )
 
 
@@ -21,4 +22,5 @@ urlpatterns = [
     path('<int:challenge_id>/submit/', ChallengeSubmitView.as_view(), name='challenge_submit'),
     path('<int:challenge_id>/result/', ChallengeSubmissionDetailView.as_view(), name='challenge_submission_detail'),
     path('submissions/me/', MyChallengeSubmissionsView.as_view(), name='my_challenge_submissions'),
+    path('submissions/<int:submission_id>/', SubmissionDetailByIdView.as_view(), name='submission_detail_by_id'),
 ]

@@ -608,3 +608,44 @@ class ChallengeSubmissionDetailView(generics.RetrieveAPIView):
                 {'detail': 'No submission found for this challenge.'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class SubmissionDetailByIdView(generics.RetrieveAPIView):
+    """
+    Get a specific submission by submission ID with full graded results.
+    This is used for viewing individual submissions from the submission history.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsLearnerRole]
+    
+    def get(self, request, submission_id):
+        try:
+            # Get the submission by ID, ensuring it belongs to the current user
+            submission = ChallengeSubmission.objects.select_related(
+                'challenge', 'user', 'attempt'
+            ).get(
+                id=submission_id,
+                user=request.user
+            )
+            
+            # Get the attempt with answers
+            attempt = submission.attempt
+            if not attempt:
+                return Response(
+                    {'detail': 'No attempt found for this submission.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Build the full response with graded data
+            response_data = _build_submission_response(
+                submission,
+                attempt,
+                replayed=False
+            )
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except ChallengeSubmission.DoesNotExist:
+            return Response(
+                {'detail': 'Submission not found or you do not have permission to view it.'},
+                status=status.HTTP_404_NOT_FOUND
+            )

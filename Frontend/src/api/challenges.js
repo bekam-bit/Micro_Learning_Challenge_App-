@@ -44,3 +44,9 @@ export async function fetchChallengeSubmissionResult(challengeId){
   const res = await api.get(`/challenges/${challengeId}/result/`)
   return res.data
 }
+
+export async function fetchSubmissionById(submissionId){
+  // Fetch a specific submission by submission ID with full graded results
+  const res = await api.get(`/challenges/submissions/${submissionId}/`)
+  return res.data
+}

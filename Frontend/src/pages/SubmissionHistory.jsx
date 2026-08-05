@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchMySubmissions, fetchChallenge } from '../api/challenges'
+import { fetchMySubmissions, fetchChallenge, fetchSubmissionById } from '../api/challenges'
 import { Link } from 'react-router'
 
 export default function SubmissionHistory() {
@@ -28,12 +28,28 @@ export default function SubmissionHistory() {
     try {
       // Load the challenge details to get question info
       const challengeData = await fetchChallenge(submission.challenge)
+      
+      // Load the graded submission result by submission ID
+      const gradedResult = await fetchSubmissionById(submission.id)
+      
+      console.log('Challenge data:', challengeData)
+      console.log('Graded result:', gradedResult)
+      
+      // The gradedResult should already have the complete structure with results field
+      const enrichedSubmission = {
+        ...submission,
+        ...gradedResult // Merge all graded data including the results field
+      }
+      
+      console.log('Enriched submission:', enrichedSubmission)
+      
       setSelectedChallenge(challengeData)
-      setSelectedSubmission(submission)
+      setSelectedSubmission(enrichedSubmission)
       setViewMode('detail')
     } catch (err) {
       console.error('Error loading submission details:', err)
-      alert('Failed to load submission details')
+      console.error('Error response:', err.response?.data)
+      alert('Failed to load submission details. Please try again.')
     }
   }
 

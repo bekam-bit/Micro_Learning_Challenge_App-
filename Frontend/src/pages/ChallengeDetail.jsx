@@ -9,6 +9,7 @@ export default function ChallengeDetail() {
   const [answers, setAnswers] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
+  const [hasSubmitted, setHasSubmitted] = useState(false)
 
   useEffect(() => {
     // Load challenge details
@@ -17,15 +18,15 @@ export default function ChallengeDetail() {
         setChallenge(data)
         setLoading(false)
         
-        // After challenge loads, try to load previous submission result
-        fetchChallengeSubmissionResult(id)
-          .then((resultData) => {
-            console.log('Loaded graded submission from backend:', resultData)
-            setResult(resultData)
+        // Check if user has already submitted this challenge
+        fetchMySubmissions(id)
+          .then((submissionData) => {
+            if (submissionData.results && submissionData.results.length > 0) {
+              setHasSubmitted(true)
+            }
           })
-          .catch((err) => {
-            // No previous submission or error loading - that's okay
-            console.log('No previous submission found (user hasn\'t submitted yet)')
+          .catch(() => {
+            // Ignore errors - user just hasn't submitted
           })
       })
       .catch((err) => {
@@ -323,35 +324,63 @@ export default function ChallengeDetail() {
           {challenge.description && <p className="text-slate-400 text-sm leading-relaxed">{challenge.description}</p>}
         </div>
 
-        <div className="space-y-4 pt-2">
-          {challenge.questions && challenge.questions.length > 0 ? (
-            challenge.questions.map((q, idx) => renderQuestion(q, idx))
-          ) : (
-            <p className="text-slate-500 text-sm italic">No questions found for this challenge.</p>
-          )}
-        </div>
+        {/* Show message if already submitted */}
+        {hasSubmitted && !result && (
+          <div className="text-center py-12 space-y-4">
+            <span className="text-6xl block">✅</span>
+            <h2 className="text-2xl font-bold text-white">Challenge Already Completed</h2>
+            <p className="text-slate-400 text-sm max-w-md mx-auto">
+              You've already submitted this challenge. View your detailed results and scores in your submission history.
+            </p>
+            <div className="flex gap-3 justify-center pt-4">
+              <Link
+                to="/challenges"
+                className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl border border-slate-700 transition-all text-sm"
+              >
+                ← Back to Challenges
+              </Link>
+              <Link
+                to="/submissions"
+                className="px-6 py-3 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg transition-all text-sm"
+              >
+                View Submission History 📋
+              </Link>
+            </div>
+          </div>
+        )}
 
-        <div className="pt-4 flex items-center justify-end">
-          <button
-            onClick={onSubmit}
-            disabled={submitting || result}
-            className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 text-sm"
-          >
-            {submitting ? (
-              <>
-                <svg className="animate-spin h-4 w-4 text-slate-950" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                </svg>
-                Submitting Attempt...
-              </>
-            ) : result ? (
-              <>✓ Submitted</>
-            ) : (
-              'Submit Attempt ✓'
-            )}
-          </button>
-        </div>
+        {/* Only show questions and submit button if not yet submitted */}
+        {!result && !hasSubmitted && (
+          <>
+            <div className="space-y-4 pt-2">
+              {challenge.questions && challenge.questions.length > 0 ? (
+                challenge.questions.map((q, idx) => renderQuestion(q, idx))
+              ) : (
+                <p className="text-slate-500 text-sm italic">No questions found for this challenge.</p>
+              )}
+            </div>
+
+            <div className="pt-4 flex items-center justify-end">
+              <button
+                onClick={onSubmit}
+                disabled={submitting}
+                className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 text-sm"
+              >
+                {submitting ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-slate-950" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    Submitting Attempt...
+                  </>
+                ) : (
+                  'Submit Attempt ✓'
+                )}
+              </button>
+            </div>
+          </>
+        )}
 
         {result && result.results && (
           <section className="mt-8 pt-6 border-t border-slate-800/80 space-y-6">
