@@ -136,7 +136,7 @@ export default function SubmissionHistory() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-center">
               <div className="text-lg font-bold text-white">
-                {result.results.answers.filter(a => a.score > 0).length}/{result.results.answers.length}
+                {result.results.answers.filter(a => a.score === (challenge.questions.find(q => q.id === a.question)?.max_score || 0)).length}/{result.results.answers.length}
               </div>
               <div className="text-xs text-slate-400">Correct</div>
             </div>

@@ -314,17 +314,13 @@ def _calculate_score(question, answer_text):
             # No correct answers defined, can't score
             return 0.0
         
-        # Calculate partial credit based on correct selections and incorrect selections
+        # Calculate partial credit based only on correct selections
+        # Don't penalize wrong selections - just reward correct ones
         correct_selections = len(submitted_normalized & expected_normalized)  # Intersection
-        incorrect_selections = len(submitted_normalized - expected_normalized)  # Wrong choices
         total_expected = len(expected_normalized)
         
-        # Scoring formula: (correct - incorrect) / total_expected * max_score
-        # This penalizes guessing - selecting wrong answers reduces score
-        raw_ratio = (correct_selections - incorrect_selections) / total_expected
-        
-        # Ensure score is between 0 and max_score
-        score_ratio = max(0.0, min(1.0, raw_ratio))
+        # Scoring formula: (correct selections / total expected) * max_score
+        score_ratio = correct_selections / total_expected
         
         return round(score_ratio * question.max_score, 2)
     
