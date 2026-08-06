@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchChallenge, submitAttempt, fetchMySubmissions, fetchChallengeProgress, fetchChallengeSubmissionResult } from '../api/challenges'
+import { fetchChallenge, submitAttempt, fetchMySubmissions } from '../api/challenges'
 import { useParams, Link, useNavigate } from 'react-router'
 
 export default function ChallengeDetail() {

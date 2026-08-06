@@ -30,24 +30,25 @@ export default function Dashboard() {
       // Calculate stats
       const subs = submissionsData.results || []
       const totalScore = subs.reduce((sum, sub) => sum + (sub.results?.total_score || sub.score || 0), 0)
+      
+      // Calculate perfect scores using challenge_max_score from backend
       const perfectScores = subs.filter(sub => {
-        if (!sub.results?.answers) return false
-        const total = sub.results.answers.reduce((sum, a) => sum + (a.score || 0), 0)
-        return total === sub.results.total_score && sub.results.total_score > 0
+        const earnedScore = sub.results?.total_score || sub.score || 0
+        const maxScore = sub.challenge_max_score || 0
+        return maxScore > 0 && earnedScore === maxScore
       }).length
 
-      // Calculate average accuracy
+      // Calculate average accuracy using actual challenge_max_score from backend
       let totalAccuracy = 0
       let validSubmissions = 0
       subs.forEach(sub => {
-        if (sub.results?.answers && sub.results.answers.length > 0) {
-          const maxScore = sub.results.answers.reduce((sum, a) => {
-            return sum + (a.score || 0) + (a.score === 0 ? 10 : 0) // Assume 10 points per question
-          }, 0)
-          if (maxScore > 0) {
-            totalAccuracy += ((sub.results.total_score / maxScore) * 100)
-            validSubmissions++
-          }
+        const earnedScore = sub.results?.total_score || sub.score || 0
+        const maxScore = sub.challenge_max_score
+        
+        if (maxScore && maxScore > 0) {
+          const accuracy = (earnedScore / maxScore) * 100
+          totalAccuracy += accuracy
+          validSubmissions++
         }
       })
 
@@ -294,9 +295,10 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-3">
             {recentSubmissions.map((submission) => {
-              const accuracy = submission.results 
-                ? Math.round((submission.results.total_score / submission.results.answers.reduce((sum, a) => sum + (a.score || 0) + (a.score === 0 ? 10 : 0), 0)) * 100) || 0
-                : 0
+              // Calculate accuracy using actual challenge_max_score from backend
+              const earnedScore = submission.results?.total_score || submission.score || 0
+              const maxScore = submission.challenge_max_score || 0
+              const accuracy = maxScore > 0 ? Math.round((earnedScore / maxScore) * 100) : 0
 
               return (
                 <div
