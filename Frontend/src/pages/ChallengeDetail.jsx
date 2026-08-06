@@ -11,6 +11,8 @@ export default function ChallengeDetail() {
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
   const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(null) // Seconds remaining
+  const [timerStarted, setTimerStarted] = useState(false)
 
   useEffect(() => {
     // Load challenge details
@@ -18,6 +20,13 @@ export default function ChallengeDetail() {
       .then((data) => {
         setChallenge(data)
         setLoading(false)
+        
+        // Initialize timer with time_limit_minutes from challenge
+        if (data.time_limit_minutes) {
+          const totalSeconds = data.time_limit_minutes * 60
+          setTimeLeft(totalSeconds)
+          setTimerStarted(true)
+        }
         
         // Check if user has already submitted this challenge
         fetchMySubmissions(id)
@@ -41,6 +50,46 @@ export default function ChallengeDetail() {
         setLoading(false)
       })
   }, [id, navigate])
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (!timerStarted || timeLeft === null || timeLeft <= 0 || result || hasSubmitted) {
+      return
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          // Time's up! Auto-submit
+          clearInterval(timer)
+          onSubmit()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [timerStarted, timeLeft, result, hasSubmitted])
+
+  // Format time as MM:SS
+  const formatTime = (seconds) => {
+    if (seconds === null) return '--:--'
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+
+  // Determine timer color based on remaining time
+  const getTimerColor = () => {
+    if (timeLeft === null) return 'text-slate-400'
+    const totalTime = challenge?.time_limit_minutes * 60 || 0
+    const percentage = (timeLeft / totalTime) * 100
+    
+    if (percentage <= 10) return 'text-red-400'  // Last 10% - red
+    if (percentage <= 25) return 'text-amber-400' // Last 25% - amber
+    return 'text-sky-400' // Normal - sky blue
+  }
 
   if (loading) {
     return (
@@ -324,12 +373,47 @@ export default function ChallengeDetail() {
 
       <section className="bg-slate-900/70 border border-slate-800/80 backdrop-blur-2xl rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
         <div>
-          <span className="text-xs font-bold tracking-widest text-sky-400 uppercase bg-sky-950/60 border border-sky-800/50 px-2.5 py-0.5 rounded-full">
-            Challenge Details
-          </span>
+          <div className="flex items-center justify-between flex-wrap gap-4 mb-2">
+            <span className="text-xs font-bold tracking-widest text-sky-400 uppercase bg-sky-950/60 border border-sky-800/50 px-2.5 py-0.5 rounded-full">
+              Challenge Details
+            </span>
+            
+            {/* Countdown Timer */}
+            {!result && !hasSubmitted && timeLeft !== null && (
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all ${
+                timeLeft <= challenge?.time_limit_minutes * 6 
+                  ? 'bg-red-950/50 border-red-700/50 animate-pulse' 
+                  : timeLeft <= challenge?.time_limit_minutes * 15 
+                  ? 'bg-amber-950/50 border-amber-700/50' 
+                  : 'bg-slate-950/50 border-slate-700/50'
+              }`}>
+                <span className="text-xl">⏱️</span>
+                <div>
+                  <div className={`text-2xl font-bold font-mono ${getTimerColor()}`}>
+                    {formatTime(timeLeft)}
+                  </div>
+                  <div className="text-xs text-slate-400">Time Remaining</div>
+                </div>
+              </div>
+            )}
+          </div>
+          
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white mt-2 mb-2">{challenge.title}</h1>
           {challenge.description && <p className="text-slate-400 text-sm leading-relaxed">{challenge.description}</p>}
         </div>
+
+        {/* Time Warning Alert */}
+        {!result && !hasSubmitted && timeLeft !== null && timeLeft <= challenge?.time_limit_minutes * 6 && timeLeft > 0 && (
+          <div className="bg-red-950/30 border-2 border-red-700/50 rounded-xl p-4 animate-pulse">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">⚠️</span>
+              <div>
+                <p className="text-sm font-bold text-red-300">Time Running Out!</p>
+                <p className="text-xs text-red-400/80">Only {formatTime(timeLeft)} remaining. Submit your answers soon!</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Show message if already submitted */}
         {hasSubmitted && !result && (
