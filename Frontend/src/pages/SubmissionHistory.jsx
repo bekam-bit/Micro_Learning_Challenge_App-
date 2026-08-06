@@ -59,6 +59,22 @@ export default function SubmissionHistory() {
     setSelectedChallenge(null)
   }
 
+  // Format time in user-friendly way
+  const formatTimeUserFriendly = (seconds) => {
+    if (!seconds || seconds === 0) return '0s'
+    
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    
+    const parts = []
+    if (hours > 0) parts.push(`${hours}h`)
+    if (minutes > 0) parts.push(`${minutes}m`)
+    if (secs > 0 || parts.length === 0) parts.push(`${secs}s`)
+    
+    return parts.join(' ')
+  }
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto w-full p-8 bg-slate-900/60 border border-slate-800 rounded-3xl animate-pulse space-y-6">
@@ -132,7 +148,7 @@ export default function SubmissionHistory() {
             </div>
             <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-center">
               <div className="text-lg font-bold text-white">
-                {result.results.completion_time_seconds}s
+                {formatTimeUserFriendly(result.results.completion_time_seconds)}
               </div>
               <div className="text-xs text-slate-400">Time Taken</div>
             </div>

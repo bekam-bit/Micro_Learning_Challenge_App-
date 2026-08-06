@@ -6,11 +6,14 @@ export default function ChallengesList() {
   const [challenges, setChallenges] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [totalChallenges, setTotalChallenges] = useState(0) // Track total challenges in system
+  const [allCompleted, setAllCompleted] = useState(false) // Track if user completed all
 
   useEffect(() => {
     // Load both challenges and user's submissions
+    // Use cache busting (true) to get fresh data and avoid stale cache issues
     Promise.all([
-      fetchChallenges(),
+      fetchChallenges(true),
       fetchMySubmissions() // Get all submissions to filter out completed challenges
     ])
       .then(([challengesData, submissionsData]) => {
@@ -21,15 +24,29 @@ export default function ChallengesList() {
           (submissionsData.results || []).map(sub => sub.challenge)
         )
         
+        // DEBUG: Log the data
+        console.log('🔍 DEBUG: Challenges List Data')
+        console.log('Total challenges from API:', allChallenges.length)
+        console.log('All challenges:', allChallenges.map(c => ({ id: c.id, title: c.title })))
+        console.log('Total submissions:', submissionsData.results?.length || 0)
+        console.log('Submitted challenge IDs:', Array.from(submittedChallengeIds))
+        
         // Filter out completed challenges
         const availableChallenges = allChallenges.filter(
           challenge => !submittedChallengeIds.has(challenge.id)
         )
         
+        console.log('Available challenges (after filter):', availableChallenges.length)
+        console.log('Available:', availableChallenges.map(c => ({ id: c.id, title: c.title })))
+        
+        // Set state to distinguish between "no challenges exist" vs "all completed"
+        setTotalChallenges(allChallenges.length)
+        setAllCompleted(allChallenges.length > 0 && availableChallenges.length === 0)
         setChallenges(availableChallenges)
         setLoading(false)
       })
       .catch((err) => {
+        console.error('❌ Error loading challenges:', err)
         setError(
           err?.response?.status === 401
             ? 'You must be logged in to view challenges.'
@@ -95,15 +112,32 @@ export default function ChallengesList() {
 
       {challenges.length === 0 && !error && (
         <div className="text-center py-16 bg-slate-900/50 border border-slate-800 rounded-2xl space-y-4">
-          <span className="text-5xl">🎉</span>
-          <p className="text-slate-300 text-lg font-semibold">All challenges completed!</p>
-          <p className="text-slate-400 text-sm">You've completed all available challenges. Check back later for new ones!</p>
-          <Link
-            to="/submissions"
-            className="inline-block mt-4 px-6 py-3 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg transition-all"
-          >
-            View Your Submissions 📋
-          </Link>
+          {allCompleted ? (
+            // User has completed all available challenges
+            <>
+              <span className="text-5xl">🎉</span>
+              <p className="text-slate-300 text-lg font-semibold">All challenges completed!</p>
+              <p className="text-slate-400 text-sm">
+                Amazing work! You've completed all {totalChallenges} available challenge{totalChallenges !== 1 ? 's' : ''}. 
+                Check back later for new ones!
+              </p>
+              <Link
+                to="/submissions"
+                className="inline-block mt-4 px-6 py-3 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg transition-all"
+              >
+                View Your Submissions 📋
+              </Link>
+            </>
+          ) : (
+            // No challenges exist in the system yet
+            <>
+              <span className="text-5xl">📚</span>
+              <p className="text-slate-300 text-lg font-semibold">No challenges available yet</p>
+              <p className="text-slate-400 text-sm">
+                There are no challenges in the system at the moment. Check back soon!
+              </p>
+            </>
+          )}
         </div>
       )}
 

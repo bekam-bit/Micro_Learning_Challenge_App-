@@ -1,7 +1,9 @@
 import api from './axios'
 
-export async function fetchChallenges(){
-  const res = await api.get('/challenges/')
+export async function fetchChallenges(bustCache = false){
+  // Add cache buster parameter to force fresh data when needed
+  const params = bustCache ? { _t: Date.now() } : {}
+  const res = await api.get('/challenges/', { params })
   return res.data
 }
 

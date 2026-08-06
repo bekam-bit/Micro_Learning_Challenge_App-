@@ -267,6 +267,10 @@ def _canonicalize_answer_text(question, answer_data):
 
 
 def _is_answer_correct(question, answer_text):
+    """
+    Check if answer is correct. Returns True for full credit, False for no credit.
+    Note: For partial credit scoring, use _calculate_score() instead.
+    """
     if question.question_type == ChallengeQuestion.TYPE_MULTIPLE_CHOICE:
         try:
             submitted_values = json.loads(answer_text or '[]')
@@ -290,6 +294,43 @@ def _is_answer_correct(question, answer_text):
         return _normalize_answer(answer_text) == _normalize_answer(question.correct_answer)
 
     return _normalize_answer(answer_text) == _normalize_answer(question.correct_answer)
+
+
+def _calculate_score(question, answer_text):
+    """
+    Calculate score for an answer with partial credit support for multiple choice.
+    Returns a float between 0 and question.max_score.
+    """
+    if question.question_type == ChallengeQuestion.TYPE_MULTIPLE_CHOICE:
+        try:
+            submitted_values = json.loads(answer_text or '[]')
+        except json.JSONDecodeError:
+            submitted_values = []
+        
+        submitted_normalized = set(_normalize_multiple_choice(submitted_values))
+        expected_normalized = set(_normalize_multiple_choice(question.correct_options))
+        
+        if not expected_normalized:
+            # No correct answers defined, can't score
+            return 0.0
+        
+        # Calculate partial credit based on correct selections and incorrect selections
+        correct_selections = len(submitted_normalized & expected_normalized)  # Intersection
+        incorrect_selections = len(submitted_normalized - expected_normalized)  # Wrong choices
+        total_expected = len(expected_normalized)
+        
+        # Scoring formula: (correct - incorrect) / total_expected * max_score
+        # This penalizes guessing - selecting wrong answers reduces score
+        raw_ratio = (correct_selections - incorrect_selections) / total_expected
+        
+        # Ensure score is between 0 and max_score
+        score_ratio = max(0.0, min(1.0, raw_ratio))
+        
+        return round(score_ratio * question.max_score, 2)
+    
+    # For all other question types, it's all or nothing
+    is_correct = _is_answer_correct(question, answer_text)
+    return question.max_score if is_correct else 0.0
 
 
 def _upsert_attempt_answers(attempt, answers_payload):
@@ -365,8 +406,10 @@ def _grade_attempt(attempt):
         max_score += question.max_score
         answer = answer_by_question_id[question.id]
 
-        is_correct = _is_answer_correct(question, answer.answer_text)
-        score = question.max_score if is_correct else 0
+        # Use new partial credit scoring for multiple choice
+        score = _calculate_score(question, answer.answer_text)
+        is_correct = score == question.max_score  # Full credit = correct
+        
         if answer.is_correct != is_correct or answer.score != score:
             answer.is_correct = is_correct
             answer.score = score
