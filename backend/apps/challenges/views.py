@@ -130,6 +130,16 @@ class ChallengeDetailView(generics.RetrieveUpdateDestroyAPIView):
             return cached_response
 
         response = super().retrieve(request, *args, **kwargs)
+        
+        # AUTO-CREATE attempt when user opens challenge to track start time
+        if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role == 'learner':
+            challenge_id = kwargs.get('pk')
+            if challenge_id:
+                ChallengeAttempt.objects.get_or_create(
+                    challenge_id=challenge_id,
+                    user=request.user,
+                )
+        
         set_cached_response(request, namespace=self.cache_namespace, response=response)
         return response
 
