@@ -436,6 +436,10 @@ def _grade_attempt(attempt):
             'last_saved_at',
         ]
     )
+    
+    # Refresh from DB to ensure submitted_at is persisted
+    attempt.refresh_from_db()
+    
     attempt.update_user_progress()
     register_challenge_completion_activity(attempt.user, points_earned=attempt.points_awarded)
     return max_score
@@ -450,10 +454,17 @@ def _build_submission_response(submission, attempt, replayed=False, *, max_score
     response_data['deadline_at'] = attempt.deadline_at
     response_data['submitted_at'] = attempt.submitted_at
     response_data['submission_timing_status'] = 'on_time' if attempt.is_within_time_limit else 'late'
+    
+    # Calculate completion time
     if attempt.started_at and attempt.submitted_at:
-        response_data['completion_time_seconds'] = int((attempt.submitted_at - attempt.started_at).total_seconds())
+        completion_seconds = int((attempt.submitted_at - attempt.started_at).total_seconds())
+        response_data['completion_time_seconds'] = completion_seconds
+        # Debug logging
+        print(f"DEBUG: Attempt #{attempt.id} - started_at: {attempt.started_at}, submitted_at: {attempt.submitted_at}, completion: {completion_seconds}s")
     else:
         response_data['completion_time_seconds'] = None
+        print(f"DEBUG: Attempt #{attempt.id} - Missing times! started_at: {attempt.started_at}, submitted_at: {attempt.submitted_at}")
+    
     response_data['points_awarded'] = attempt.points_awarded
     response_data['idempotency_replayed'] = replayed
     if hasattr(attempt, '_prefetched_objects_cache') and 'answers' in attempt._prefetched_objects_cache:
