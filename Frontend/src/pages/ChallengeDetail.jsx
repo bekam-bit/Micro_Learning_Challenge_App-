@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchChallenge, submitAttempt, fetchMySubmissions } from '../api/challenges'
+import { fetchChallenge, submitAttempt, fetchMySubmissions, fetchChallengeProgress, saveChallengeProgress } from '../api/challenges'
 import { useParams, Link, useNavigate } from 'react-router'
 
 export default function ChallengeDetail() {
@@ -72,8 +72,8 @@ export default function ChallengeDetail() {
           console.log('Time expired while away. Auto-submitting...')
           setTimeExpired(true)
           setTimeout(() => {
-            onSubmit()
-          }, 1000)
+            onSubmit(true)
+          }, 500)
         }
       }
     }
@@ -103,8 +103,30 @@ export default function ChallengeDetail() {
             console.log('Restored saved answers from localStorage')
           }
         } catch (e) {
-          console.error('Failed to restore saved answers:', e)
+          console.error('Failed to restore saved answers from localStorage:', e)
         }
+
+        // Fetch draft progress from DB models (ChallengeAttempt and ChallengeAttemptAnswer)
+        fetchChallengeProgress(id)
+          .then((progressData) => {
+            if (progressData && progressData.answers && progressData.answers.length > 0) {
+              const dbAnswers = {}
+              progressData.answers.forEach((ans) => {
+                if (ans.question && ans.submitted_answer !== undefined && ans.submitted_answer !== null) {
+                  if (ans.question_type === 'true_false') {
+                    dbAnswers[ans.question] = String(ans.submitted_answer)
+                  } else {
+                    dbAnswers[ans.question] = ans.submitted_answer
+                  }
+                }
+              })
+              setAnswers((prev) => ({ ...dbAnswers, ...prev }))
+              console.log('Restored draft progress from DB models (ChallengeAttemptAnswer):', dbAnswers)
+            }
+          })
+          .catch(() => {
+            // Ignore - no saved DB progress yet
+          })
         
         // Calculate clock offset for synchronization
         if (data.server_time) {
@@ -134,8 +156,8 @@ export default function ChallengeDetail() {
             
             // Auto-submit after a brief moment
             setTimeout(() => {
-              onSubmit()
-            }, 1000)
+              onSubmit(true)
+            }, 500)
           }
         } else if (data.time_limit_minutes) {
           // New attempt - initialize with full time
@@ -169,7 +191,7 @@ export default function ChallengeDetail() {
       })
   }, [id, navigate])
 
-  // Countdown timer effect
+  // Countdown timer effect - decrements timeLeft every second
   useEffect(() => {
     if (!timerStarted || timeLeft === null || timeLeft <= 0 || result || hasSubmitted) {
       return
@@ -178,9 +200,7 @@ export default function ChallengeDetail() {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Time's up! Auto-submit
           clearInterval(timer)
-          onSubmit()
           return 0
         }
         return prev - 1
@@ -190,22 +210,80 @@ export default function ChallengeDetail() {
     return () => clearInterval(timer)
   }, [timerStarted, timeLeft, result, hasSubmitted])
 
-  // Periodically save answers to localStorage (every 10 seconds)
+  // Dedicated Auto-submit effect when timeLeft reaches 0
+  useEffect(() => {
+    if (timerStarted && timeLeft === 0 && !result && !hasSubmitted && !submitting) {
+      console.log('⏱️ Time reached 0! Triggering auto-submit...')
+      setTimeExpired(true)
+      const timer = setTimeout(() => {
+        onSubmit(true) // Pass true to force auto-submit and bypass question validation
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [timeLeft, timerStarted, timeExpired, result, hasSubmitted, submitting])
+
+  const formatAnswersPayload = (answersObj, questions) => {
+    if (!questions) return []
+    return questions.map((q) => {
+      const answer = answersObj[q.id] || ''
+
+      if (q.question_type === 'multiple_choice') {
+        return {
+          question_id: q.id,
+          answer_options: Array.isArray(answer) ? answer : [],
+        }
+      }
+
+      if (q.question_type === 'single_choice') {
+        return {
+          question_id: q.id,
+          answer_text: answer,
+        }
+      }
+
+      if (q.question_type === 'true_false') {
+        return {
+          question_id: q.id,
+          answer_boolean: answer === 'true',
+        }
+      }
+
+      if (q.question_type === 'numeric') {
+        return {
+          question_id: q.id,
+          answer_number: parseFloat(answer) || 0,
+        }
+      }
+
+      return {
+        question_id: q.id,
+        answer_text: answer,
+      }
+    })
+  }
+
+  // Auto-save answers to DB models (ChallengeAttempt & ChallengeAttemptAnswer) and localStorage
   useEffect(() => {
     if (!challenge || result || hasSubmitted || Object.keys(answers).length === 0) {
       return
     }
 
-    const saveInterval = setInterval(() => {
-      try {
-        localStorage.setItem(`challenge_answers_${challenge.id}`, JSON.stringify(answers))
-        console.log('Auto-saved answers to localStorage')
-      } catch (e) {
-        console.error('Failed to auto-save answers:', e)
-      }
-    }, 10000) // Save every 10 seconds
+    // Save to localStorage immediately
+    try {
+      localStorage.setItem(`challenge_answers_${challenge.id}`, JSON.stringify(answers))
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e)
+    }
 
-    return () => clearInterval(saveInterval)
+    // Debounced save to DB models ChallengeAttempt and ChallengeAttemptAnswer
+    const saveTimer = setTimeout(() => {
+      const payload = { answers: formatAnswersPayload(answers, challenge.questions) }
+      saveChallengeProgress(challenge.id, payload)
+        .then(() => console.log('Successfully saved draft progress to DB models (ChallengeAttemptAnswer)'))
+        .catch((err) => console.log('DB progress save notice:', err.response?.data?.detail || err.message))
+    }, 1500)
+
+    return () => clearTimeout(saveTimer)
   }, [challenge, answers, result, hasSubmitted])
 
   // Format time as MM:SS
@@ -287,11 +365,15 @@ export default function ChallengeDetail() {
     })
   }
 
-  const onSubmit = async () => {
+  const onSubmit = async (isAutoSubmit = false) => {
+    if (submitting || result || hasSubmitted) return
+
     setValidationError('')
 
-    // Validate answers before manual submission (bypass validation if time expired to allow auto-submit)
-    if (!timeExpired && challenge?.questions && challenge.questions.length > 0) {
+    const isExpired = (typeof isAutoSubmit === 'boolean' && isAutoSubmit) || timeExpired || (timeLeft !== null && timeLeft <= 0)
+
+    // Validate answers before manual submission (bypass validation if auto-submitting / time expired)
+    if (!isExpired && challenge?.questions && challenge.questions.length > 0) {
       const unansweredQuestions = challenge.questions.filter((q) => !isQuestionAnswered(q, answers[q.id]))
 
       if (unansweredQuestions.length > 0) {
@@ -778,7 +860,7 @@ export default function ChallengeDetail() {
 
             {/* Validation Error Banner */}
             {validationError && (
-              <div className="bg-rose-950/60 border-2 border-rose-600/80 rounded-2xl p-5 text-rose-200 shadow-xl animate-pulse space-y-2">
+              <div className="bg-rose-950/60 border-2 border-rose-600/80 rounded-2xl p-5 text-rose-200 shadow-xl space-y-2">
                 <div className="flex items-start gap-3">
                   <span className="text-3xl flex-shrink-0">⚠️</span>
                   <div className="flex-1 space-y-1">
@@ -807,7 +889,7 @@ export default function ChallengeDetail() {
                 </div>
               )}
               <button
-                onClick={onSubmit}
+                onClick={() => onSubmit(false)}
                 disabled={submitting || timeExpired}
                 className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 text-sm"
               >

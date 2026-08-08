@@ -9,6 +9,7 @@ export default function ChallengesList() {
   const [totalChallenges, setTotalChallenges] = useState(0) // Track total challenges in system
   const [allCompleted, setAllCompleted] = useState(false) // Track if user completed all
   const [now, setNow] = useState(Date.now())
+  const [clockOffset, setClockOffset] = useState(0)
 
   // Ticking timer for active attempts on challenge cards
   useEffect(() => {
@@ -33,10 +34,8 @@ export default function ChallengesList() {
   const getCardTimeLeft = (c) => {
     if (!c.has_active_attempt || !c.attempt_deadline) return null
     const deadline = new Date(c.attempt_deadline).getTime()
-    const serverTime = c.server_time ? new Date(c.server_time).getTime() : null
-    const offset = serverTime ? (serverTime - Date.now()) : 0
-    const current = now + offset
-    return Math.max(0, Math.floor((deadline - current) / 1000))
+    const currentEstimatedServerTime = now + clockOffset
+    return Math.max(0, Math.floor((deadline - currentEstimatedServerTime) / 1000))
   }
 
   useEffect(() => {
@@ -48,6 +47,14 @@ export default function ChallengesList() {
     ])
       .then(([challengesData, submissionsData]) => {
         const allChallenges = challengesData.results || challengesData
+
+        // Calculate clock offset for synchronization once when data arrives
+        const sampleWithServerTime = allChallenges.find(c => c.server_time)
+        if (sampleWithServerTime && sampleWithServerTime.server_time) {
+          const serverTime = new Date(sampleWithServerTime.server_time).getTime()
+          const clientTime = Date.now()
+          setClockOffset(serverTime - clientTime)
+        }
         
         // Get IDs of challenges the user has already submitted
         const submittedChallengeIds = new Set(
