@@ -4,10 +4,10 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.categories.models import Category
-from apps.lessons.models import Lesson
-from apps.modules.models import Module
-from apps.users.models import UserDailyActivity, UserProfile
+from categories.models import Category
+from lessons.models import Lesson
+from modules.models import Module
+from users.models import UserDailyActivity, UserProfile
 
 from .models import ChallengeAttempt, ChallengeQuestion, ChallengeSubmission
 
