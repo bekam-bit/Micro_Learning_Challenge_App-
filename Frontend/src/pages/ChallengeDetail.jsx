@@ -15,6 +15,31 @@ export default function ChallengeDetail() {
   const [timerStarted, setTimerStarted] = useState(false)
   const [timeExpired, setTimeExpired] = useState(false)
   const [clockOffset, setClockOffset] = useState(0) // Server time - client time offset
+  const [validationError, setValidationError] = useState('')
+  const [validationAttempted, setValidationAttempted] = useState(false)
+
+  const isQuestionAnswered = (question, answer) => {
+    if (answer === undefined || answer === null) return false
+
+    if (question.question_type === 'single_choice') {
+      return typeof answer === 'string' && answer.trim() !== ''
+    }
+
+    if (question.question_type === 'multiple_choice') {
+      return Array.isArray(answer) && answer.length > 0
+    }
+
+    if (question.question_type === 'true_false') {
+      return answer === 'true' || answer === 'false'
+    }
+
+    if (question.question_type === 'numeric') {
+      if (typeof answer === 'number') return !isNaN(answer)
+      return typeof answer === 'string' && answer.trim() !== '' && !isNaN(Number(answer))
+    }
+
+    return typeof answer === 'string' && answer.trim() !== ''
+  }
 
   useEffect(() => {
     // Warn user before leaving page
@@ -263,6 +288,35 @@ export default function ChallengeDetail() {
   }
 
   const onSubmit = async () => {
+    setValidationError('')
+
+    // Validate answers before manual submission (bypass validation if time expired to allow auto-submit)
+    if (!timeExpired && challenge?.questions && challenge.questions.length > 0) {
+      const unansweredQuestions = challenge.questions.filter((q) => !isQuestionAnswered(q, answers[q.id]))
+
+      if (unansweredQuestions.length > 0) {
+        setValidationAttempted(true)
+        const unansweredIndices = unansweredQuestions.map((q) => {
+          const idx = challenge.questions.findIndex((item) => item.id === q.id)
+          return `Question #${idx + 1}`
+        })
+
+        const errorMsg = `Please answer all questions before submitting. Unanswered: ${unansweredIndices.join(', ')}.`
+        setValidationError(errorMsg)
+
+        // Smooth scroll to the first unanswered question
+        const firstUnansweredId = unansweredQuestions[0].id
+        setTimeout(() => {
+          const el = document.getElementById(`question-${firstUnansweredId}`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 100)
+
+        return
+      }
+    }
+
     setSubmitting(true)
     try {
       const answersArray = challenge.questions.map((q) => {
@@ -352,31 +406,55 @@ export default function ChallengeDetail() {
 
   const renderQuestion = (q, idx) => {
     const { id: qid, question_text, question_type, options } = q
-
-    // Disable form inputs if time expired
     const isDisabled = timeExpired
+    const isAnswered = isQuestionAnswered(q, answers[qid])
+    const isMissing = validationAttempted && !isAnswered
+
+    const containerStyle = `rounded-2xl p-5 space-y-4 shadow-inner transition-all border ${
+      isMissing
+        ? 'bg-rose-950/40 border-rose-600/80 shadow-rose-950/40 ring-1 ring-rose-500/40'
+        : 'bg-slate-950/60 border-slate-800/80'
+    }`
+
+    const headerBadge = isAnswered ? (
+      <span className="flex-shrink-0 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+        ✓ Answered
+      </span>
+    ) : isMissing ? (
+      <span className="flex-shrink-0 text-[11px] font-bold text-rose-200 bg-rose-950/90 border border-rose-600/80 px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+        ⚠️ Answer Required
+      </span>
+    ) : (
+      <span className="flex-shrink-0 text-[11px] font-medium text-slate-500 bg-slate-900 border border-slate-800 px-2.5 py-0.5 rounded-full">
+        Not answered
+      </span>
+    )
 
     // Multiple Choice - Checkboxes
     if (question_type === 'multiple_choice') {
       return (
         <div
+          id={`question-${qid}`}
           key={qid}
-          className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 space-y-4 shadow-inner"
+          className={containerStyle}
         >
-          <div className="flex items-start gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center">
-              {idx + 1}
-            </span>
-            <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center mt-0.5">
+                {idx + 1}
+              </span>
+              <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+            </div>
+            {headerBadge}
           </div>
-          
+
           <div className="space-y-2 pl-9">
             <p className="text-xs text-slate-400 mb-3">Select all that apply:</p>
             {options && options.map((opt) => {
               const optionLabel = opt.label || opt
               const optionText = opt.text || opt
               const isChecked = (answers[qid] || []).includes(optionLabel)
-              
+
               return (
                 <label
                   key={optionLabel}
@@ -404,23 +482,27 @@ export default function ChallengeDetail() {
     if (question_type === 'single_choice') {
       return (
         <div
+          id={`question-${qid}`}
           key={qid}
-          className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 space-y-4 shadow-inner"
+          className={containerStyle}
         >
-          <div className="flex items-start gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center">
-              {idx + 1}
-            </span>
-            <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center mt-0.5">
+                {idx + 1}
+              </span>
+              <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+            </div>
+            {headerBadge}
           </div>
-          
+
           <div className="space-y-2 pl-9">
             <p className="text-xs text-slate-400 mb-3">Select one:</p>
             {options && options.map((opt) => {
               const optionLabel = opt.label || opt
               const optionText = opt.text || opt
               const isChecked = answers[qid] === optionLabel
-              
+
               return (
                 <label
                   key={optionLabel}
@@ -449,16 +531,20 @@ export default function ChallengeDetail() {
     if (question_type === 'true_false') {
       return (
         <div
+          id={`question-${qid}`}
           key={qid}
-          className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 space-y-4 shadow-inner"
+          className={containerStyle}
         >
-          <div className="flex items-start gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center">
-              {idx + 1}
-            </span>
-            <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center mt-0.5">
+                {idx + 1}
+              </span>
+              <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+            </div>
+            {headerBadge}
           </div>
-          
+
           <div className="flex gap-3 pl-9">
             {['true', 'false'].map((value) => (
               <label
@@ -486,14 +572,18 @@ export default function ChallengeDetail() {
     // Text/Numeric Input
     return (
       <div
+        id={`question-${qid}`}
         key={qid}
-        className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 space-y-3 shadow-inner"
+        className={containerStyle}
       >
-        <div className="flex items-start gap-3">
-          <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center">
-            {idx + 1}
-          </span>
-          <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 flex-1">
+            <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-sky-950 text-sky-400 border border-sky-800/50 text-xs font-bold flex items-center justify-center mt-0.5">
+              {idx + 1}
+            </span>
+            <p className="text-sm font-semibold text-slate-200 leading-snug whitespace-pre-wrap">{question_text}</p>
+          </div>
+          {headerBadge}
         </div>
         <div className="pl-9">
           <input
@@ -611,6 +701,97 @@ export default function ChallengeDetail() {
         {/* Only show questions and submit button if not yet submitted */}
         {!result && !hasSubmitted && (
           <>
+            {/* Question Completion Progress & Navigation Pills */}
+            {challenge.questions && challenge.questions.length > 0 && (() => {
+              const answeredCount = challenge.questions.filter((q) => isQuestionAnswered(q, answers[q.id])).length
+              const totalQuestions = challenge.questions.length
+              const isAllAnswered = answeredCount === totalQuestions && totalQuestions > 0
+              const completionPercentage = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0
+
+              return (
+                <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 space-y-3 backdrop-blur-xl shadow-lg">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white">Progress</span>
+                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                        isAllAnswered
+                          ? 'text-emerald-300 bg-emerald-950/60 border-emerald-700/60'
+                          : 'text-sky-300 bg-sky-950/60 border-sky-800/50'
+                      }`}>
+                        {answeredCount} of {totalQuestions} answered ({completionPercentage}%)
+                      </span>
+                    </div>
+
+                    {isAllAnswered ? (
+                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                        <span>🎉</span> All questions answered! Ready to submit.
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400 font-medium">
+                        Answer all questions to submit
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+                    <div
+                      className={`h-full transition-all duration-500 rounded-full ${
+                        isAllAnswered ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-sky-500 to-cyan-400'
+                      }`}
+                      style={{ width: `${completionPercentage}%` }}
+                    ></div>
+                  </div>
+
+                  {/* Question Jump Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[11px] font-medium text-slate-400 mr-1">Questions:</span>
+                    {challenge.questions.map((q, idx) => {
+                      const answered = isQuestionAnswered(q, answers[q.id])
+                      const missing = validationAttempted && !answered
+
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => {
+                            const el = document.getElementById(`question-${q.id}`)
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          }}
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                            missing
+                              ? 'bg-rose-950/80 border-rose-600/80 text-rose-300 animate-pulse'
+                              : answered
+                              ? 'bg-emerald-950/50 border-emerald-700/50 text-emerald-300 hover:bg-emerald-900/60'
+                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                          }`}
+                        >
+                          <span>Q{idx + 1}</span>
+                          {answered ? <span>✓</span> : missing ? <span>!</span> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Validation Error Banner */}
+            {validationError && (
+              <div className="bg-rose-950/60 border-2 border-rose-600/80 rounded-2xl p-5 text-rose-200 shadow-xl animate-pulse space-y-2">
+                <div className="flex items-start gap-3">
+                  <span className="text-3xl flex-shrink-0">⚠️</span>
+                  <div className="flex-1 space-y-1">
+                    <h4 className="text-sm font-bold text-rose-100">Answer All Questions Before Submitting</h4>
+                    <p className="text-xs text-rose-300/90 leading-relaxed">{validationError}</p>
+                    <p className="text-[11px] text-rose-400 font-medium pt-1">
+                      Check questions marked with <span className="text-rose-200 font-bold bg-rose-900/80 px-2 py-0.5 rounded border border-rose-700">⚠️ Answer Required</span> above.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4 pt-2">
               {challenge.questions && challenge.questions.length > 0 ? (
                 challenge.questions.map((q, idx) => renderQuestion(q, idx))
@@ -619,7 +800,12 @@ export default function ChallengeDetail() {
               )}
             </div>
 
-            <div className="pt-4 flex items-center justify-end">
+            <div className="pt-4 flex flex-col items-end gap-3">
+              {validationError && (
+                <div className="w-full sm:w-auto text-xs font-semibold text-rose-300 bg-rose-950/90 border border-rose-600/80 px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg animate-pulse">
+                  <span>⚠️</span> {validationError}
+                </div>
+              )}
               <button
                 onClick={onSubmit}
                 disabled={submitting || timeExpired}

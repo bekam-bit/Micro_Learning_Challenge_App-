@@ -8,6 +8,36 @@ export default function ChallengesList() {
   const [error, setError] = useState('')
   const [totalChallenges, setTotalChallenges] = useState(0) // Track total challenges in system
   const [allCompleted, setAllCompleted] = useState(false) // Track if user completed all
+  const [now, setNow] = useState(Date.now())
+
+  // Ticking timer for active attempts on challenge cards
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const formatRemainingTime = (seconds) => {
+    if (seconds === null || seconds < 0) return '00:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    if (mins >= 60) {
+      const hours = Math.floor(mins / 60)
+      const remMins = mins % 60
+      return `${hours}:${String(remMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    }
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+
+  const getCardTimeLeft = (c) => {
+    if (!c.has_active_attempt || !c.attempt_deadline) return null
+    const deadline = new Date(c.attempt_deadline).getTime()
+    const serverTime = c.server_time ? new Date(c.server_time).getTime() : null
+    const offset = serverTime ? (serverTime - Date.now()) : 0
+    const current = now + offset
+    return Math.max(0, Math.floor((deadline - current) / 1000))
+  }
 
   useEffect(() => {
     // Load both challenges and user's submissions
@@ -142,55 +172,85 @@ export default function ChallengesList() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {challenges.map((c, index) => (
-          <div
-            key={c.id || index}
-            className="group relative bg-slate-900/70 border border-slate-800/80 hover:border-sky-500/40 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:shadow-sky-500/10 hover:-translate-y-1 backdrop-blur-xl flex flex-col justify-between"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-sky-400 bg-sky-950/80 border border-sky-800/50 px-2.5 py-0.5 rounded-md">
-                  Challenge #{c.id || index + 1}
-                </span>
-                {c.category && (
-                  <span className="text-[11px] font-medium text-slate-400 bg-slate-950 px-2 py-0.5 rounded">
-                    {c.category}
-                  </span>
-                )}
-              </div>
-              <h2 className="text-lg font-bold text-white group-hover:text-sky-300 transition-colors line-clamp-2">
-                {c.title}
-              </h2>
-              {c.summary && <p className="text-slate-400 text-xs leading-relaxed line-clamp-3">{c.summary}</p>}
-            </div>
+        {challenges.map((c, index) => {
+          const cardTimeLeft = getCardTimeLeft(c)
 
-            <div className="pt-5 mt-4 border-t border-slate-800/80 flex items-center justify-between">
-              <span className="text-xs text-slate-500 font-medium">
-                {c.questions ? `${c.questions.length} Questions` : 'Interactive Quiz'}
-              </span>
-              <Link
-                to={`/challenges/${c.id}`}
-                className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
-                  c.has_active_attempt
-                    ? 'text-amber-400 group-hover:text-amber-300 bg-amber-950/40 group-hover:bg-amber-900/50 border-amber-800/40'
-                    : 'text-sky-400 group-hover:text-sky-300 bg-sky-950/40 group-hover:bg-sky-900/50 border-sky-800/40'
-                }`}
-              >
-                {c.has_active_attempt ? (
-                  <>
-                    <span>⏱️</span> Continue Challenge
-                    <span className="group-hover:translate-x-0.5 transition-transform">→</span>
-                  </>
-                ) : (
-                  <>
-                    Start Challenge
-                    <span className="group-hover:translate-x-0.5 transition-transform">→</span>
-                  </>
-                )}
-              </Link>
+          return (
+            <div
+              key={c.id || index}
+              className={`group relative bg-slate-900/70 border rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 backdrop-blur-xl flex flex-col justify-between ${
+                c.has_active_attempt
+                  ? 'border-amber-500/30 hover:border-amber-500/60 shadow-amber-950/20'
+                  : 'border-slate-800/80 hover:border-sky-500/40 hover:shadow-sky-500/10'
+              }`}
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-sky-400 bg-sky-950/80 border border-sky-800/50 px-2.5 py-0.5 rounded-md">
+                    Challenge #{c.id || index + 1}
+                  </span>
+                  
+                  <div className="flex items-center gap-2">
+                    {c.has_active_attempt && cardTimeLeft !== null && (
+                      <span className={`text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-md flex items-center gap-1.5 border shadow-sm ${
+                        cardTimeLeft <= 60
+                          ? 'text-red-300 bg-red-950/90 border-red-700/80 animate-pulse shadow-red-900/50'
+                          : 'text-amber-300 bg-amber-950/80 border-amber-700/60 animate-pulse shadow-amber-900/40'
+                      }`}>
+                        <span>⏱️</span>
+                        {cardTimeLeft > 0 ? formatRemainingTime(cardTimeLeft) : 'Time Expired'}
+                      </span>
+                    )}
+
+                    {c.category && (
+                      <span className="text-[11px] font-medium text-slate-400 bg-slate-950 px-2 py-0.5 rounded">
+                        {c.category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <h2 className="text-lg font-bold text-white group-hover:text-sky-300 transition-colors line-clamp-2">
+                  {c.title}
+                </h2>
+                {c.summary && <p className="text-slate-400 text-xs leading-relaxed line-clamp-3">{c.summary}</p>}
+              </div>
+
+              <div className="pt-5 mt-4 border-t border-slate-800/80 flex items-center justify-between gap-3">
+                <span className="text-xs text-slate-500 font-medium">
+                  {c.questions ? `${c.questions.length} Questions` : 'Interactive Quiz'}
+                </span>
+                <Link
+                  to={`/challenges/${c.id}`}
+                  className={`inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border transition-all shadow-md ${
+                    c.has_active_attempt
+                      ? 'text-amber-300 group-hover:text-amber-200 bg-amber-950/60 group-hover:bg-amber-900/80 border-amber-700/60 shadow-amber-950/40'
+                      : 'text-sky-400 group-hover:text-sky-300 bg-sky-950/40 group-hover:bg-sky-900/50 border-sky-800/40'
+                  }`}
+                >
+                  {c.has_active_attempt ? (
+                    <>
+                      <span>⏱️</span>
+                      {cardTimeLeft !== null && cardTimeLeft > 0 ? (
+                        <span>Continue ({formatRemainingTime(cardTimeLeft)})</span>
+                      ) : cardTimeLeft === 0 ? (
+                        <span>Submit Attempt</span>
+                      ) : (
+                        <span>Continue Challenge</span>
+                      )}
+                      <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                    </>
+                  ) : (
+                    <>
+                      Start Challenge
+                      <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                    </>
+                  )}
+                </Link>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

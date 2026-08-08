@@ -16,6 +16,7 @@ class ChallengeSerializer(serializers.ModelSerializer):
     scope_display = serializers.SerializerMethodField()
     has_active_attempt = serializers.SerializerMethodField()
     attempt_deadline = serializers.SerializerMethodField()
+    server_time = serializers.SerializerMethodField()
 
     class Meta:
         model = Challenge
@@ -35,8 +36,9 @@ class ChallengeSerializer(serializers.ModelSerializer):
             'scope_display',
             'has_active_attempt',
             'attempt_deadline',
+            'server_time',
         ]
-        read_only_fields = ['id', 'is_daily', 'scope', 'scope_display', 'has_active_attempt', 'attempt_deadline']
+        read_only_fields = ['id', 'is_daily', 'scope', 'scope_display', 'has_active_attempt', 'attempt_deadline', 'server_time']
 
     def get_scope(self, obj):
         return obj.get_scope()
@@ -71,6 +73,11 @@ class ChallengeSerializer(serializers.ModelSerializer):
         ).first()
         
         return attempt.deadline_at if attempt else None
+
+    def get_server_time(self, obj):
+        """Return current server time for clock synchronization"""
+        from django.utils import timezone
+        return timezone.now()
 
     def validate(self, attrs):
         if attrs.get('is_daily', False):
