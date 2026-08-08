@@ -28,6 +28,41 @@ api.interceptors.response.use(
     const status = error.response?.status
     const config = error.config
 
+    // Handle 401 Unauthorized - try to refresh token
+    if (status === 401 && !config.__retryAuth) {
+      config.__retryAuth = true
+      
+      try {
+        const refresh = localStorage.getItem('refresh_token')
+        if (refresh) {
+          // Try to refresh the token
+          const refreshResponse = await axios.post(`${apiBaseURL}/auth/token/refresh/`, { refresh })
+          const newAccessToken = refreshResponse.data.access
+          
+          // Save new access token
+          localStorage.setItem('access_token', newAccessToken)
+          
+          // Retry the original request with new token
+          config.headers.Authorization = `Bearer ${newAccessToken}`
+          return api.request(config)
+        }
+      } catch (refreshError) {
+        // Refresh failed - clear tokens and redirect to login
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        
+        // Don't redirect during page load or for non-essential endpoints
+        if (typeof window !== 'undefined' && !config.url?.includes('/auth/')) {
+          console.error('Session expired. Please login again.')
+          // Only redirect if not already on login page
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login?session_expired=true'
+          }
+        }
+        return Promise.reject(refreshError)
+      }
+    }
+
     if (config && RETRYABLE_STATUS_CODES.has(status) && !config.__retryOnce) {
       config.__retryOnce = true
       await wait(1500)

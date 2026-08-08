@@ -170,10 +170,23 @@ export default function ChallengesList() {
               </span>
               <Link
                 to={`/challenges/${c.id}`}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-400 group-hover:text-sky-300 bg-sky-950/40 group-hover:bg-sky-900/50 px-3 py-1.5 rounded-xl border border-sky-800/40 transition-all"
+                className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+                  c.has_active_attempt
+                    ? 'text-amber-400 group-hover:text-amber-300 bg-amber-950/40 group-hover:bg-amber-900/50 border-amber-800/40'
+                    : 'text-sky-400 group-hover:text-sky-300 bg-sky-950/40 group-hover:bg-sky-900/50 border-sky-800/40'
+                }`}
               >
-                Start Challenge
-                <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                {c.has_active_attempt ? (
+                  <>
+                    <span>⏱️</span> Continue Challenge
+                    <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                  </>
+                ) : (
+                  <>
+                    Start Challenge
+                    <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                  </>
+                )}
               </Link>
             </div>
           </div>

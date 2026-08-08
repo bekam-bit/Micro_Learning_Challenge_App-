@@ -13,6 +13,54 @@ export default function ChallengeDetail() {
   const [hasSubmitted, setHasSubmitted] = useState(false)
   const [timeLeft, setTimeLeft] = useState(null) // Seconds remaining
   const [timerStarted, setTimerStarted] = useState(false)
+  const [timeExpired, setTimeExpired] = useState(false)
+  const [clockOffset, setClockOffset] = useState(0) // Server time - client time offset
+
+  useEffect(() => {
+    // Warn user before leaving page
+    const handleBeforeUnload = (e) => {
+      if (!result && !hasSubmitted && timerStarted) {
+        e.preventDefault()
+        e.returnValue = 'You have an active challenge. Your answers may be lost if you leave.'
+        return e.returnValue
+      }
+    }
+
+    // Handle tab visibility change - recalculate time when tab becomes active
+    const handleVisibilityChange = () => {
+      if (!document.hidden && challenge && challenge.has_active_attempt && challenge.attempt_deadline) {
+        // Tab became visible - recalculate time from deadline
+        const deadline = new Date(challenge.attempt_deadline).getTime()
+        const now = Date.now() + clockOffset
+        const remainingSeconds = Math.max(0, Math.floor((deadline - now) / 1000))
+        
+        console.log('Tab became active. Recalculating time:', {
+          deadline: new Date(deadline).toISOString(),
+          now: new Date(now).toISOString(),
+          remainingSeconds
+        })
+        
+        setTimeLeft(remainingSeconds)
+        
+        // If time expired while user was away, auto-submit
+        if (remainingSeconds === 0 && !result && !hasSubmitted) {
+          console.log('Time expired while away. Auto-submitting...')
+          setTimeExpired(true)
+          setTimeout(() => {
+            onSubmit()
+          }, 1000)
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [result, hasSubmitted, timerStarted, challenge, clockOffset])
 
   useEffect(() => {
     // Load challenge details
@@ -21,8 +69,51 @@ export default function ChallengeDetail() {
         setChallenge(data)
         setLoading(false)
         
-        // Initialize timer with time_limit_minutes from challenge
-        if (data.time_limit_minutes) {
+        // Restore saved answers from localStorage if available
+        try {
+          const savedAnswers = localStorage.getItem(`challenge_answers_${id}`)
+          if (savedAnswers) {
+            const parsedAnswers = JSON.parse(savedAnswers)
+            setAnswers(parsedAnswers)
+            console.log('Restored saved answers from localStorage')
+          }
+        } catch (e) {
+          console.error('Failed to restore saved answers:', e)
+        }
+        
+        // Calculate clock offset for synchronization
+        if (data.server_time) {
+          const serverTime = new Date(data.server_time).getTime()
+          const clientTime = Date.now()
+          const offset = serverTime - clientTime
+          setClockOffset(offset)
+          console.log(`Clock offset: ${offset}ms (server ${offset > 0 ? 'ahead' : 'behind'})`)
+        }
+        
+        // Check if user has active attempt with deadline
+        if (data.has_active_attempt && data.attempt_deadline) {
+          // Calculate remaining time from deadline using server time
+          const deadline = new Date(data.attempt_deadline).getTime()
+          const now = Date.now() + (data.server_time ? (new Date(data.server_time).getTime() - Date.now()) : 0)
+          const remainingSeconds = Math.max(0, Math.floor((deadline - now) / 1000))
+          
+          if (remainingSeconds > 0) {
+            setTimeLeft(remainingSeconds)
+            setTimerStarted(true)
+          } else {
+            // Time already expired!
+            console.log('Challenge time expired. Auto-submitting...')
+            setTimeExpired(true)
+            setTimeLeft(0)
+            setTimerStarted(true)
+            
+            // Auto-submit after a brief moment
+            setTimeout(() => {
+              onSubmit()
+            }, 1000)
+          }
+        } else if (data.time_limit_minutes) {
+          // New attempt - initialize with full time
           const totalSeconds = data.time_limit_minutes * 60
           setTimeLeft(totalSeconds)
           setTimerStarted(true)
@@ -33,6 +124,8 @@ export default function ChallengeDetail() {
           .then((submissionData) => {
             if (submissionData.results && submissionData.results.length > 0) {
               setHasSubmitted(true)
+              // Clear saved answers since challenge is completed
+              localStorage.removeItem(`challenge_answers_${id}`)
               // Redirect to submissions page after a short delay
               setTimeout(() => {
                 navigate('/submissions', { 
@@ -71,6 +164,24 @@ export default function ChallengeDetail() {
 
     return () => clearInterval(timer)
   }, [timerStarted, timeLeft, result, hasSubmitted])
+
+  // Periodically save answers to localStorage (every 10 seconds)
+  useEffect(() => {
+    if (!challenge || result || hasSubmitted || Object.keys(answers).length === 0) {
+      return
+    }
+
+    const saveInterval = setInterval(() => {
+      try {
+        localStorage.setItem(`challenge_answers_${challenge.id}`, JSON.stringify(answers))
+        console.log('Auto-saved answers to localStorage')
+      } catch (e) {
+        console.error('Failed to auto-save answers:', e)
+      }
+    }, 10000) // Save every 10 seconds
+
+    return () => clearInterval(saveInterval)
+  }, [challenge, answers, result, hasSubmitted])
 
   // Format time as MM:SS
   const formatTime = (seconds) => {
@@ -214,6 +325,19 @@ export default function ChallengeDetail() {
       console.error('Submission error:', err)
       console.error('Error response:', err.response?.data)
       
+      // Check if it's a session timeout error
+      if (err.response?.status === 401) {
+        alert('Your session has expired. Please login again. Your answers have been saved locally and you can retry after logging in.')
+        // Save answers to localStorage before redirect
+        try {
+          localStorage.setItem(`challenge_answers_${challenge.id}`, JSON.stringify(answers))
+        } catch (e) {
+          console.error('Failed to save answers:', e)
+        }
+        navigate('/login?session_expired=true')
+        return
+      }
+      
       const errorMessage = err.response?.data?.detail 
         || err.response?.data?.message
         || JSON.stringify(err.response?.data)
@@ -228,6 +352,9 @@ export default function ChallengeDetail() {
 
   const renderQuestion = (q, idx) => {
     const { id: qid, question_text, question_type, options } = q
+
+    // Disable form inputs if time expired
+    const isDisabled = timeExpired
 
     // Multiple Choice - Checkboxes
     if (question_type === 'multiple_choice') {
@@ -258,8 +385,9 @@ export default function ChallengeDetail() {
                   <input
                     type="checkbox"
                     checked={isChecked}
+                    disabled={isDisabled}
                     onChange={(e) => onChangeMultiple(qid, optionLabel, e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-950 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 rounded border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-950 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <span className="text-sm text-slate-300 group-hover:text-slate-200 transition-colors">
                     <span className="font-semibold text-sky-400">{optionLabel}.</span> {optionText}
@@ -302,8 +430,9 @@ export default function ChallengeDetail() {
                     type="radio"
                     name={`question-${qid}`}
                     checked={isChecked}
+                    disabled={isDisabled}
                     onChange={() => onChangeSingle(qid, optionLabel)}
-                    className="mt-0.5 w-4 h-4 border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-950 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-950 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <span className="text-sm text-slate-300 group-hover:text-slate-200 transition-colors">
                     <span className="font-semibold text-sky-400">{optionLabel}.</span> {optionText}
@@ -340,8 +469,9 @@ export default function ChallengeDetail() {
                   type="radio"
                   name={`question-${qid}`}
                   checked={answers[qid] === value}
+                  disabled={isDisabled}
                   onChange={() => onChangeSingle(qid, value)}
-                  className="w-4 h-4 border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-950 cursor-pointer"
+                  className="w-4 h-4 border-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-950 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <span className="text-sm font-semibold text-slate-300 group-hover:text-slate-200 transition-colors capitalize">
                   {value}
@@ -370,8 +500,9 @@ export default function ChallengeDetail() {
             type={question_type === 'numeric' ? 'number' : 'text'}
             value={answers[qid] || ''}
             placeholder="Type your answer here..."
+            disabled={isDisabled}
             onChange={(e) => onChangeSingle(qid, e.target.value)}
-            className="w-full px-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 text-sm transition-all"
+            className="w-full px-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
       </div>
@@ -393,6 +524,14 @@ export default function ChallengeDetail() {
             <span className="text-xs font-bold tracking-widest text-sky-400 uppercase bg-sky-950/60 border border-sky-800/50 px-2.5 py-0.5 rounded-full">
               Challenge Details
             </span>
+            
+            {/* Show "Continuing..." badge if user returned to active attempt */}
+            {challenge.has_active_attempt && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-950/50 border border-amber-700/50 rounded-xl">
+                <span className="text-sm">↻</span>
+                <span className="text-xs font-bold text-amber-300">Continuing Challenge</span>
+              </div>
+            )}
             
             {/* Countdown Timer */}
             {!result && !hasSubmitted && timeLeft !== null && (
@@ -426,6 +565,19 @@ export default function ChallengeDetail() {
               <div>
                 <p className="text-sm font-bold text-red-300">Time Running Out!</p>
                 <p className="text-xs text-red-400/80">Only {formatTime(timeLeft)} remaining. Submit your answers soon!</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Time Expired Alert */}
+        {!result && !hasSubmitted && timeExpired && (
+          <div className="bg-red-950/50 border-2 border-red-600/70 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">⏱️</span>
+              <div>
+                <p className="text-base font-bold text-red-200">Time Expired!</p>
+                <p className="text-sm text-red-300/90">The challenge time limit has been reached. Auto-submitting your answers...</p>
               </div>
             </div>
           </div>
@@ -470,7 +622,7 @@ export default function ChallengeDetail() {
             <div className="pt-4 flex items-center justify-end">
               <button
                 onClick={onSubmit}
-                disabled={submitting}
+                disabled={submitting || timeExpired}
                 className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 text-sm"
               >
                 {submitting ? (
@@ -481,6 +633,8 @@ export default function ChallengeDetail() {
                     </svg>
                     Submitting Attempt...
                   </>
+                ) : timeExpired ? (
+                  '⏱️ Time Expired - Submitting...'
                 ) : (
                   'Submit Attempt ✓'
                 )}
