@@ -11,8 +11,8 @@ from rest_framework.views import APIView
 from config.api_cache import get_cached_response, invalidate_namespace, set_cached_response
 from config.pagination import StandardPageNumberPagination
 
-from users.permissions import IsAdminRole, IsLearnerRole
-from users.services import register_challenge_completion_activity
+from apps.users.permissions import IsAdminRole, IsLearnerRole
+from apps.users.services import register_challenge_completion_activity
 
 from .models import (
     Challenge,
