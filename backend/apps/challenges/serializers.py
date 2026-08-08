@@ -14,6 +14,8 @@ from .models import (
 class ChallengeSerializer(serializers.ModelSerializer):
     scope = serializers.SerializerMethodField()
     scope_display = serializers.SerializerMethodField()
+    has_active_attempt = serializers.SerializerMethodField()
+    attempt_deadline = serializers.SerializerMethodField()
 
     class Meta:
         model = Challenge
@@ -31,14 +33,44 @@ class ChallengeSerializer(serializers.ModelSerializer):
             'category',
             'scope',
             'scope_display',
+            'has_active_attempt',
+            'attempt_deadline',
         ]
-        read_only_fields = ['id', 'is_daily', 'scope', 'scope_display']
+        read_only_fields = ['id', 'is_daily', 'scope', 'scope_display', 'has_active_attempt', 'attempt_deadline']
 
     def get_scope(self, obj):
         return obj.get_scope()
 
     def get_scope_display(self, obj):
         return obj.get_scope_display()
+
+    def get_has_active_attempt(self, obj):
+        """Check if user has an active (not submitted) attempt for this challenge"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        
+        attempt = ChallengeAttempt.objects.filter(
+            challenge=obj,
+            user=request.user,
+            is_submitted=False
+        ).first()
+        
+        return attempt is not None
+
+    def get_attempt_deadline(self, obj):
+        """Get deadline for active attempt if exists"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        attempt = ChallengeAttempt.objects.filter(
+            challenge=obj,
+            user=request.user,
+            is_submitted=False
+        ).first()
+        
+        return attempt.deadline_at if attempt else None
 
     def validate(self, attrs):
         if attrs.get('is_daily', False):
@@ -57,9 +89,10 @@ class ChallengeSerializer(serializers.ModelSerializer):
 
 class ChallengeDetailSerializer(ChallengeSerializer):
     questions = serializers.SerializerMethodField()
+    server_time = serializers.SerializerMethodField()
 
     class Meta(ChallengeSerializer.Meta):
-        fields = ChallengeSerializer.Meta.fields + ['questions']
+        fields = ChallengeSerializer.Meta.fields + ['questions', 'server_time']
 
     def get_questions(self, obj):
         request = self.context.get('request')
@@ -69,6 +102,11 @@ class ChallengeDetailSerializer(ChallengeSerializer):
         if user and user.is_authenticated and getattr(user, 'role', None) == 'admin':
             return ChallengeQuestionAdminSerializer(queryset, many=True, context=self.context).data
         return ChallengeQuestionPublicSerializer(queryset, many=True, context=self.context).data
+
+    def get_server_time(self, obj):
+        """Return current server time for clock synchronization"""
+        from django.utils import timezone
+        return timezone.now()
 
 
 class ChallengeSubmissionSerializer(serializers.ModelSerializer):
