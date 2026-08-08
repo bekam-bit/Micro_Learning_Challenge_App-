@@ -11,8 +11,8 @@ from rest_framework.views import APIView
 from config.api_cache import get_cached_response, invalidate_namespace, set_cached_response
 from config.pagination import StandardPageNumberPagination
 
-from apps.users.permissions import IsAdminRole, IsLearnerRole
-from apps.users.services import register_challenge_completion_activity
+from users.permissions import IsAdminRole, IsLearnerRole
+from users.services import register_challenge_completion_activity
 
 from .models import (
     Challenge,
@@ -426,7 +426,7 @@ def _grade_attempt(attempt):
         ChallengeAttemptAnswer.objects.bulk_update(answers_to_update, ['is_correct', 'score'])
 
     within_time_limit = not attempt.has_expired()
-    if within_time_limit and max_score > 0:
+    if max_score > 0:
         points_awarded = round((attempt.challenge.points * total_score) / max_score)
     else:
         points_awarded = 0
@@ -519,11 +519,6 @@ class ChallengeProgressView(APIView):
         if attempt.is_submitted:
             return Response(
                 {'detail': 'Challenge is already submitted and cannot be edited.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if attempt.has_expired():
-            return Response(
-                {'detail': 'Time limit exceeded. Latest saved progress is preserved, but updates are closed.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
